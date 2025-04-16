@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@string/firebase_database_url,@string/gcm_defaultSenderId,@string/google_storage_bucket,@string/project_id,@string/google_api_key,@string/google_crash_reporting_api_key,@string/google_app_id,@string/default_android_client_id,@string/default_web_client_id">
+  <string name="firebase_database_url" translatable="false">https://kids-market-e481b-default-rtdb.firebaseio.com</string>
+  <string name="gcm_defaultSenderId" translatable="false">813117900284</string>
+  <string name="google_storage_bucket" translatable="false">kids-market-e481b.firebasestorage.app</string>
+  <string name="project_id" translatable="false">kids-market-e481b</string>
+  <string name="google_api_key" translatable="false">AIzaSyDWvOUd4aXlIa_vkSMGXHmc2q_OdCx4U_w</string>
+  <string name="google_crash_reporting_api_key" translatable="false">AIzaSyDWvOUd4aXlIa_vkSMGXHmc2q_OdCx4U_w</string>
+  <string name="google_app_id" translatable="false">1:813117900284:android:7725472b4ef24eaa66de79</string>
+  <string name="default_android_client_id" translatable="false">813117900284-ukfml2o61hmr0uomp7g43upsh04en56v.apps.googleusercontent.com</string>
+  <string name="default_web_client_id" translatable="false">813117900284-risu940mlp24r8e63ot30ku84k9lp148.apps.googleusercontent.com</string>
+</resources>

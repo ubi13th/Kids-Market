@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "813117900284",
+    "firebase_url": "https://kids-market-e481b-default-rtdb.firebaseio.com",
+    "project_id": "kids-market-e481b",
+    "storage_bucket": "kids-market-e481b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813117900284:android:7725472b4ef24eaa66de79",
+        "android_client_info": {
+          "package_name": "com.ubi13th.kidsmarket"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "813117900284-ukfml2o61hmr0uomp7g43upsh04en56v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ubi13th.kidsmarket",
+            "certificate_hash": "bf88f891036b6ba479f8745a378706311fa8b774"
+          }
+        },
+        {
+          "client_id": "813117900284-risu940mlp24r8e63ot30ku84k9lp148.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWvOUd4aXlIa_vkSMGXHmc2q_OdCx4U_w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "813117900284-risu940mlp24r8e63ot30ku84k9lp148.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "813117900284-9a25slljsjim5ma0klsigehev9efdiuk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ubi13th.kidsmarket"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

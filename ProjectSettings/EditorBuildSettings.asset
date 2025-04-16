@@ -6,10 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/MainScene.unity
-    guid: 8c9cfa26abfee488c85f1582747f6a02
+    path: Assets/_App/Scenes/StartScene.unity
+    guid: 7926e702f45c78245b65b743f502b0df
   m_configObjects:
-    com.unity.adaptiveperformance.loader_settings: {fileID: 11400000, guid: 71dfa1bc72c2593488f20dde726f4fc7, type: 2}
-    com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: aaf4d643169953b439a7ec414e270477, type: 2}
-    com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
-  m_UseUCBPForAssetBundles: 0
+    com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 67108a2ef84c17e4183c26b0e1389395, type: 2}
