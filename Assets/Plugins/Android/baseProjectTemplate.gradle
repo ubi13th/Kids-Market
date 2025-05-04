@@ -1,0 +1,23 @@
+plugins {
+    // Be sure Gradle version matches Unity’s supported version
+    id 'com.android.application' version '7.4.2' apply false
+    id 'com.android.library' version '7.4.2' apply false
+    **BUILD_SCRIPT_DEPS**
+}
+
+// 🔥 This is the key part: Make sure to include required repos
+allprojects {
+    repositories {
+        google()            // Required for Firebase
+        mavenCentral()      // For other dependencies
+        jcenter()           // Optional, only if you have legacy libs (deprecated but still useful sometimes)
+        flatDir {
+            dirs 'libs'
+        }
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+

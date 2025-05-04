@@ -6,7 +6,23 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/_App/Scenes/StartScene.unity
+    path: Assets/Scenes/Bootstarp.unity
+    guid: ad41ea070b7ea9d4e9c69d919e682881
+  - enabled: 1
+    path: Assets/Scenes/LoginScene.unity
     guid: 7926e702f45c78245b65b743f502b0df
+  - enabled: 1
+    path: Assets/Scenes/DashboardScene.unity
+    guid: 8e8289cd3873e6b41a3fa43fb0327938
+  - enabled: 1
+    path: Assets/Scenes/SettingsScene.unity
+    guid: 27da023913231d74cbd4af267b257765
+  - enabled: 1
+    path: Assets/Scenes/SubscriptionScene.unity
+    guid: 4e134a3e665a9414ca0dce7a1f47739d
+  - enabled: 1
+    path: Assets/Scenes/ReportsScene.unity
+    guid: e2ff48f3670ce2d4981adca9e73f61d4
   m_configObjects:
-    com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 67108a2ef84c17e4183c26b0e1389395, type: 2}
+    com.unity.adaptiveperformance.loader_settings: {fileID: 11400000, guid: d1c0e91bcafb99446a4e028084b16e45, type: 2}
+    com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 532747fedb92f70478ac90356ee5325b, type: 2}
