@@ -15,13 +15,12 @@ namespace _App.Bootstrap
         public static FirebaseAuth Auth { get; private set; }
         public static DatabaseReference DbRef { get; private set; }
         public static FirebaseApp App { get; private set; }
-
+        
         public static bool IsReady { get; private set; }
 
         public static event Action OnFirebaseReady;
 
-        [Header("Config")]
-        [SerializeField] private string databaseUrl = "https://kids-market-e481b-default-rtdb.firebaseio.com";
+        private string databaseUrl = "https://kids-market-e481b-default-rtdb.firebaseio.com";
 
         private async void Awake()
         {
@@ -73,5 +72,10 @@ namespace _App.Bootstrap
                 await Task.Yield(); // non-blocking wait
             }
         }
+        
+        // Utility to get current user ID
+        public static string CurrentUserId => Auth is { CurrentUser: not null }
+            ? Auth.CurrentUser.UserId
+            : string.Empty;
     }
 }

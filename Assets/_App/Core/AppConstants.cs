@@ -30,12 +30,15 @@ public static class AppConstants
 
     public const string AssignedToUid = "AssignedToUid";
     public const string SmartContracts = "SmartContracts";
+    public const string Status = "Status";
+    public const string Confirmed = "Confirmed";
     public const string Contracts = "Contracts";
     public const string DefaultContractIcon = "ContractIconDefault";
     public const string Presets = "Presets";
     public const string Title = "Title";
     public const string Description = "Description";
     public const string Reward = "Reward";
+    public const string ExtraRewards = "ExtraRewards";
     public const string DueDate = "DueDate";
     public const string DueTime = "DueTime";
     public const string Icon = "Icon";
