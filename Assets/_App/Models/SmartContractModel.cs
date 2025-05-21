@@ -179,19 +179,19 @@ public class SmartContractModel
     public bool ShouldAppearInEveryDayGroup(DateTime selectedDay)
     {
         var target = selectedDay.Date;
-        var start = GetStartDate().Date;
         
-        //if (HiddenDates.Contains(target.ToString("yyyy-MM-dd")))
-            //return false;
+        LoadStateHistory();
 
-        // ✅ 1. Copies appear in EveryDay only on the day they were created
-        if (IsCopy && start == target)
-            return true;
+        // ✅ 1. Copies appear if they have state for the day
+        if (IsCopy && StateHistory.TryGetValue(target.ToString("yyyy-MM-dd"), out var copyState))
+        {
+            if (copyState == SmartContractState.Completed)
+                return true;
+        }
 
         // ✅ 2. Completed ONCE contracts appear in EveryDay only on completion day
         if (!IsCopy && RepeatMode == RepeatType.Once)
         {
-            LoadStateHistory();
             if (StateHistory.TryGetValue(target.ToString("yyyy-MM-dd"), out var state) &&
                 state == SmartContractState.Completed)
                 return true;

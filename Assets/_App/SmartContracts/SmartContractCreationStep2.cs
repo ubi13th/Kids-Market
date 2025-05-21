@@ -21,6 +21,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
     [SerializeField] private TextMeshProUGUI startDateText;
     [SerializeField] private TextMeshProUGUI monthLabelText;
     [SerializeField] private TextMeshProUGUI dropDownLabelText;
+    [SerializeField] private TextMeshProUGUI createEditScText;
     [Space(10)]
     [Header("UI Toggles")]
     [SerializeField] private TMP_Dropdown repeatDropdown;
@@ -175,6 +176,8 @@ public class SmartContractCreationStep2 : MonoBehaviour
         saveButton.onClick.AddListener(SaveContract);
         deleteButton.onClick.AddListener(DeleteDraft);
         backButton.onClick.AddListener(CloseSettingsPanel);
+
+        createEditScText.text = step1.isCreatingNewContract ? "New Smart Contract" : "Edit Smart Contract";
 
         if (SmartContractDraft.Id == null)
         {

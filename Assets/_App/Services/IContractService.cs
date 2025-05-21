@@ -10,7 +10,5 @@ namespace _App.Services
 
         // 🆕 New methods for per-day state handling
         void SetContractStateOnDate(string contractId, DateTime date, SmartContractState state, Action<bool> onComplete);
-        //void HideAnyoneContractForToday(string title, string adminUid, string confirmingChildUid, DateTime onDate);
-        //void RestoreAnyoneContractForToday(string parentId, string confirmingChildUid, DateTime date);
     }
 }

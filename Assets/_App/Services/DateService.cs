@@ -50,5 +50,4 @@ namespace _App.Services
 
         DayOfWeek IDateService.WeekStartsOn => WeekStartsOn;
     }
-
 }

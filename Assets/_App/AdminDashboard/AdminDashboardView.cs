@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using _App.Bootstrap;
 using _App.Services;
+using _App.Settings;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,6 +12,7 @@ namespace _App.AdminDashboard
 {
     public class AdminDashboardView : MonoBehaviour, IAdminDashboardView
     {
+        [SerializeField] private AppSettings appSettings;
         [Header("Profile & Child")]
         [SerializeField] private Button profileAvatarButton;
         [SerializeField] private Image profileAvatarImage;
@@ -23,7 +25,7 @@ namespace _App.AdminDashboard
         [SerializeField] private GameObject editRewardIcon;
 
         [Header("Calendar")]
-        [SerializeField] private Transform calendarDayButtonsContainer;
+        [SerializeField] private Transform[] calendarDayButtonsContainers;
         [SerializeField] private Button calendarDayButtonPrefab;
 
         [Header("Contracts")]
@@ -58,18 +60,21 @@ namespace _App.AdminDashboard
 
         private async void Start()
         {
-            await FirebaseInit.WaitUntilReady();
             _presenter = new AdminDashboardPresenter(
                 this,
                 new FirebaseChildService(),
                 new FirebaseContractService(),
+                new FirebaseSettingsService(),
                 new FirebaseRewardService(),
                 new DateService(),
                 new FirebaseAdminContractListenerService()
             );
+            await FirebaseInit.WaitUntilReady();
 
             string adminUid = FirebaseInit.Auth.CurrentUser.UserId;
             _presenter.Initialize(adminUid);
+            
+            appSettings.Initialize(_presenter);
             
             var isAdmin = UserSession.IsAdmin;
             adminDoubleAvatar.SetActive(isAdmin);
@@ -84,26 +89,56 @@ namespace _App.AdminDashboard
 
             SetupCalendarButtons();
         }
-
-        private void SetupCalendarButtons()
+        
+        public void SetupCalendarButtons()
         {
             _calendarButtonData.Clear();
-            var weekDays = new DateService().GetCurrentWeekDays();
 
-            foreach (var day in weekDays)
+            // Clear all old children from containers
+            foreach (var container in calendarDayButtonsContainers)
             {
-                Button button = Instantiate(calendarDayButtonPrefab, calendarDayButtonsContainer);
-                var dayText = button.transform.Find("Day")?.GetComponent<TextMeshProUGUI>();
-                if (dayText != null)
-                    dayText.text = day.ToString("ddd");
+                foreach (Transform child in container)
+                    Destroy(child.gameObject);
+            }
 
+            var dateService = new DateService();
+            var today = dateService.GetCurrentDay();
+
+            // Get week starts based on custom WeekStartsOn (e.g. Monday)
+            DateTime thisWeekStart = dateService.GetWeekStart(today);
+            DateTime prevWeekStart = thisWeekStart.AddDays(-7);
+            DateTime nextWeekStart = thisWeekStart.AddDays(7);
+
+            // Generate full weeks
+            List<DateTime> pastWeek = Enumerable.Range(0, 7).Select(i => prevWeekStart.AddDays(i)).ToList();
+            List<DateTime> presentWeek = Enumerable.Range(0, 7).Select(i => thisWeekStart.AddDays(i)).ToList();
+            List<DateTime> futureWeek = Enumerable.Range(0, 7).Select(i => nextWeekStart.AddDays(i)).ToList();
+
+            // Populate into UI containers
+            PopulateCalendarSection(pastWeek, calendarDayButtonsContainers[0]);
+            PopulateCalendarSection(presentWeek, calendarDayButtonsContainers[1]);
+            PopulateCalendarSection(futureWeek, calendarDayButtonsContainers[2]);
+        }
+        
+        private void PopulateCalendarSection(List<DateTime> days, Transform container)
+        {
+            foreach (var day in days)
+            {
+                var button = Instantiate(calendarDayButtonPrefab, container);
+                var dayText = button.transform.Find("Day")?.GetComponent<TextMeshProUGUI>();
                 var numberText = button.transform.Find("Number")?.GetComponent<TextMeshProUGUI>();
-                if (numberText != null)
-                    numberText.text = day.Day.ToString();
+                var line = button.transform.Find("Line");
+
+                if (dayText != null) dayText.text = day.ToString("ddd");
+                if (numberText != null) numberText.text = day.Day.ToString();
+                if (line != null)
+                {
+                    DayOfWeek lastDay = (DayOfWeek)(((int)DateService.WeekStartsOn + 6) % 7);
+                    if (day.DayOfWeek == lastDay)
+                        line.gameObject.SetActive(false);
+                }
                 
                 _calendarButtonData.Add((button, day));
-                if (day.DayOfWeek == DayOfWeek.Sunday)
-                    button.transform.Find("Line")?.gameObject.SetActive(false);
                 button.onClick.AddListener(() => _presenter.OnDaySelected(day));
             }
         }
@@ -131,8 +166,14 @@ namespace _App.AdminDashboard
                 }
 
                 // Filter for selected child and visible contracts
+                // var contractsForDay = allContracts
+                //     .Where(c => c.AssignedToUid == selectedChildId && c.IsVisibleOn(date))
+                //     .Where(c => c.ShouldAppearInEveryDayGroup(date) || c.IsVisibleOn(date))
+                //     .ToList();
+                
                 var contractsForDay = allContracts
                     .Where(c => c.AssignedToUid == selectedChildId && c.IsVisibleOn(date))
+                    .Where(c => c.ShouldAppearInEveryDayGroup(date)) // ✅ Only EveryDay group
                     .Where(c =>
                     {
                         // Exclude Once and AsNeeded in the past
@@ -144,6 +185,7 @@ namespace _App.AdminDashboard
                         return true;
                     })
                     .ToList();
+
 
                 if (contractsForDay.Count == 0)
                 {
@@ -230,7 +272,6 @@ namespace _App.AdminDashboard
             ClearContractUI();
 
             var selectedDay = _presenter.SelectedDay;
-            var isAdmin = UserSession.IsAdmin;
             string key = selectedDay.ToString("yyyy-MM-dd");
 
             var mergedEveryDay = new List<SmartContractModel>();

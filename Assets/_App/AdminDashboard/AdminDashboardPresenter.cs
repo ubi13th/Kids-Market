@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using _App.Bootstrap;
 using _App.Services;
-using Firebase.Database;
 using UnityEngine;
 
 namespace _App.AdminDashboard
@@ -14,6 +13,7 @@ namespace _App.AdminDashboard
         private readonly IChildService _childService;
         private readonly IContractService _contractService;
         private readonly IRewardService _rewardService;
+        private readonly IAppSettingsService _appSettingsService;
         private readonly IDateService _dateService;
         private readonly IAdminContractListenerService _contractListenerService;
         
@@ -33,6 +33,7 @@ namespace _App.AdminDashboard
             IAdminDashboardView view,
             IChildService childService,
             IContractService contractService,
+            IAppSettingsService appSettingsService,
             IRewardService rewardService,
             IDateService dateService,
             IAdminContractListenerService contractListenerService
@@ -42,6 +43,7 @@ namespace _App.AdminDashboard
             _childService = childService;
             _contractService = contractService;
             _rewardService = rewardService;
+            _appSettingsService = appSettingsService;
             _dateService = dateService;
             _contractListenerService = contractListenerService;
         }
@@ -51,13 +53,30 @@ namespace _App.AdminDashboard
             _adminUID = adminUID;
             _selectedDay = _dateService.GetCurrentDay();
             _view.ShowDaySelection(_selectedDay);
+            
+            _appSettingsService.LoadWeekStartsOn(adminUID, loadedDay =>
+            {
+                DateService.SaveWeekStartDay(loadedDay); // update local value
+                RefreshCalendarUI();          // build calendar
+            });
 
             _childService.ListenToChildren(adminUID, OnChildrenUpdated);
             _contractListenerService.ListenToAdminContracts(adminUID, OnContractsChanged);
 
-            var isAdmin = UserSession.IsAdmin;
-
             new DailyContractStateUpdater().Run(adminUID, isAdmin: true);
+        }
+
+        private void RefreshCalendarUI()
+        {
+            _view.SetupCalendarButtons(); // Rebuild layout
+            _view.UpdateCalendarColors(_allContracts, _currentChild?.Uid ?? string.Empty);
+        }
+
+        public void SaveWeekStartsOnData(DayOfWeek newStartDay)
+        {
+            _appSettingsService.SaveWeekStartsOn(newStartDay, _adminUID);
+            DateService.SaveWeekStartDay(newStartDay); // local
+            RefreshCalendarUI(); 
         }
 
         private void OnChildrenUpdated(List<ChildModel> children)
@@ -119,7 +138,7 @@ namespace _App.AdminDashboard
                     continue;
 
                 // ✅ Skip ONCE or AS_NEEDED if selectedDay is before today
-                if (selectedDay < today &&
+                if (selectedDay < today && !contract.IsCopy &&
                     contract.RepeatMode is RepeatType.Once or RepeatType.AsNeeded)
                     continue;
 
@@ -234,7 +253,7 @@ namespace _App.AdminDashboard
             return copy;
         }
         
-         public void ConfirmContract(string contractId)
+        public void ConfirmContract(string contractId)
         {
             _contractService.GetContractById(contractId, contract =>
             {
@@ -252,15 +271,21 @@ namespace _App.AdminDashboard
                 {
                     string parentId = contract.Id;
 
+                    var matchingCopies = _allContracts.Where(c =>
+                        c.IsCopy &&
+                        c.ParentId == parentId).ToList();
+
+                    Debug.Log($"🧪 Matching copies with parentId={parentId}: {matchingCopies.Count}");
+
                     // ✅ Check if a copy already exists for this parent and selected day
                     var existingCopy = _allContracts.FirstOrDefault(c =>
                         c.IsCopy &&
                         c.ParentId == parentId &&
-                        c.AssignedToUid == contract.AssignedToUid &&
-                        c.GetStartDate().Date == _selectedDay.Date);
+                        c.AssignedToUid == contract.AssignedToUid);
 
                     if (existingCopy != null)
                     {
+                        Debug.Log($"❌ existingCopy = {existingCopy}");
                         // 🟢 Just mark it as completed
                         existingCopy.SetStateOnDate(_selectedDay, SmartContractState.Completed);
 
@@ -320,43 +345,46 @@ namespace _App.AdminDashboard
 
                 if (contract.IsCopy)
                 {
-                    if (contract.HasStateOnDate(_selectedDay, SmartContractState.Completed))
+                    if (!contract.HasStateOnDate(_selectedDay, SmartContractState.Completed))
                     {
-                        contract.RemoveStateOnDate(_selectedDay);
-
-                        // After removing, check if the copy has any other day left
-                        contract.LoadStateHistory(); // just to be sure it's up-to-date
-
-                        if (contract.StateHistory.Count == 0)
-                        {
-                            // ✅ Delete the whole copy if it's now empty
-                            _contractService.DeleteContract(contract.Id, success =>
-                            {
-                                if (!success)
-                                {
-                                    Debug.LogError("❌ Failed to delete empty AsNeeded copy.");
-                                    return;
-                                }
-
-                                UpdateChildBalance(-contract.RewardAmount);
-                            });
-                        }
-                        else
-                        {
-                            // ✅ Just save the updated state
-                            _contractService.SaveContract(contract, success =>
-                            {
-                                if (!success)
-                                {
-                                    Debug.LogError("❌ Failed to update AsNeeded copy after undo.");
-                                    return;
-                                }
-
-                                UpdateChildBalance(-contract.RewardAmount);
-                            });
-                        }
+                        Debug.Log($"⚠️ Undo skipped: no completed state for {_selectedDay:yyyy-MM-dd} in copy {contract.Id}");
+                        return;
                     }
                     
+                    contract.RemoveStateOnDate(_selectedDay);
+
+                    // After removing, check if the copy has any other day left
+                    contract.LoadStateHistory(); // just to be sure it's up-to-date
+
+                    if (contract.StateHistory.Count == 0)
+                    {
+                        // ✅ Delete the whole copy if it's now empty
+                        _contractService.DeleteContract(contract.Id, success =>
+                        {
+                            if (!success)
+                            {
+                                Debug.LogError("❌ Failed to delete empty AsNeeded copy.");
+                                return;
+                            }
+
+                            UpdateChildBalance(-contract.RewardAmount);
+                        });
+                    }
+                    else
+                    {
+                        // ✅ Just save the updated state
+                        _contractService.SaveContract(contract, success =>
+                        {
+                            if (!success)
+                            {
+                                Debug.LogError("❌ Failed to update AsNeeded copy after undo.");
+                                return;
+                            }
+
+                            UpdateChildBalance(-contract.RewardAmount);
+                        });
+                    }
+
                     return;
                 }
 
@@ -373,6 +401,60 @@ namespace _App.AdminDashboard
                     }
                     UpdateChildBalance(-contract.RewardAmount);
                 });
+            });
+        }
+        
+        public void ChildBuyAdminSellContract(string contractId)
+        {
+            _contractService.GetContractById(contractId, contract =>
+            {
+                if (contract == null)
+                {
+                    Debug.LogWarning($"❌ Contract not found: {contractId}");
+                    return;
+                }
+
+                // ✅ Default path: mark directly
+                if (contract.HasStateOnDate(_selectedDay, SmartContractState.ReadyToBuy))
+                {
+                    _contractService.SetContractStateOnDate(contract.Id, _selectedDay, SmartContractState.Purchased, success =>
+                    {
+                        if (!success)
+                        {
+                            Debug.LogWarning("❌ Failed to update contract state.");
+                            return;
+                        }
+                        UpdateChildBalance(-contract.RewardAmount);
+                        
+                        Debug.Log($"✅ Contract {contract.Title} purchased on {_selectedDay:yyyy-MM-dd}");
+                    });
+                }
+            });
+        }
+        
+        public void UndoChildBuyAdminSellContract(string contractId)
+        {
+            _contractService.GetContractById(contractId, contract =>
+            {
+                if (contract == null)
+                {
+                    Debug.LogWarning($"❌ Contract not found: {contractId}");
+                    return;
+                }
+
+                // ✅ Default path: mark directly
+                if (contract.HasStateOnDate(_selectedDay, SmartContractState.Purchased))
+                {
+                    _contractService.SetContractStateOnDate(contract.Id, _selectedDay, SmartContractState.ReadyToBuy, success =>
+                    {
+                        if (!success)
+                        {
+                            Debug.LogWarning("❌ Failed to update contract state.");
+                            return;
+                        }
+                        UpdateChildBalance(contract.RewardAmount);
+                    });
+                }
             });
         }
         

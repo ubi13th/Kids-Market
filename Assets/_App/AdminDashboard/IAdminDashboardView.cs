@@ -24,5 +24,6 @@ namespace _App.AdminDashboard
         void OpenEditContractPanel();
         void SelectToday();
         void ShowGroupedContracts(Dictionary<RepeatType, List<SmartContractModel>> grouped);
+        void SetupCalendarButtons();
     }
 }
