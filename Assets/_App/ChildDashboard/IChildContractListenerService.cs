@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace _App.Services
+namespace _App.ChildDashboard
 {
     public interface IChildContractListenerService
     {

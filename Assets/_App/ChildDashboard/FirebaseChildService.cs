@@ -5,7 +5,7 @@ using _App.Bootstrap;
 using Firebase.Extensions;
 using UnityEngine;
 
-namespace _App.Services
+namespace _App.ChildDashboard
 {
     public class FirebaseChildService : IChildService
     {
@@ -83,8 +83,8 @@ namespace _App.Services
                 Debug.LogWarning("🟡 FirebaseChildService not ready yet.");
                 return;
             }
-            
-            ChildrenRef.Child(childId).GetValueAsync().ContinueWith(task =>
+
+            ChildrenRef.Child(childId).GetValueAsync().ContinueWithOnMainThread(task =>
             {
                 if (!task.IsCompletedSuccessfully || !task.Result.Exists)
                 {

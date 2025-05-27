@@ -7,6 +7,5 @@ public enum SmartContractState
     ReadyToBuy = 1,
     ReadyToConfirm = 2,
     Completed = 3,
-    Purchased = 4,
-    Hidden = 5
+    Purchased = 4
 }

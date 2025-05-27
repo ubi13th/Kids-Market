@@ -10,5 +10,6 @@ namespace _App.Services
 
         // 🆕 New methods for per-day state handling
         void SetContractStateOnDate(string contractId, DateTime date, SmartContractState state, Action<bool> onComplete);
+        void GetAsNeededCopyByParentId(string parentId, Action<SmartContractModel> callback);
     }
 }

@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using _App.AdminDashboard;
+using _App.Dashboard;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -15,20 +17,26 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
     [SerializeField] private TextMeshProUGUI rewardText;
     [SerializeField] private TextMeshProUGUI reward2Text;
     [SerializeField] private TextMeshProUGUI dueTimeText;
+    [SerializeField] private TextMeshProUGUI copyLastQueueText;
     [SerializeField] private TextMeshProUGUI sellButtonText;
     [SerializeField] private Image iconImage;
     [SerializeField] private GameObject editIcon;
     [SerializeField] private CanvasGroup canvasGroup;
     
+    [SerializeField] private GameObject copyLastQueueGo;
+    [SerializeField] private GameObject sellBtnContainer;
+    [SerializeField] private GameObject declineButtonContainer;
     [SerializeField] private GameObject check;
     [SerializeField] private GameObject coin;
+    [SerializeField] private GameObject clock;
     
     [SerializeField] private Button settingButton;
     [SerializeField] private Button editButton;
     [SerializeField] private Button sellButton;
+    [SerializeField] private Button declineButton;
     [SerializeField] private Button deleteButton;
 
-    private AdminDashboardPresenter _presenter;
+    //private AdminDashboardPresenter _presenter;
     //private Vector2 _startPosition;
     //private bool _isSwipedOpen = false;
 
@@ -37,15 +45,23 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
     public string ContractId { get; private set; }
     public SmartContractModel ContractData { get; private set; }
     
-    [SerializeField] private Color redColor, greenColor, greyColor;
+    [SerializeField] private Color redColor, greenColor, greyColor, lightGreyColor, cyanColor;
     
-    public void Setup(AdminDashboardPresenter presenter)
+    private IDashboardPresenter _presenter;
+    private IAdminDashboardPresenter _adminPresenter;
+
+    private bool _isAdmin = false;
+
+    public void Setup(IDashboardPresenter presenter)
     {
         _presenter = presenter;
+        _adminPresenter = presenter as IAdminDashboardPresenter;
     }
 
     public void Initialize(SmartContractModel contract)
     {
+        _isAdmin = UserSession.IsAdmin;
+        
         _isSettingOn = false;
         
         ContractData = contract;
@@ -71,7 +87,17 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
         var today = DateTime.Today;
         var selectedDay = _presenter.SelectedDay.Date;
         var isFuture = selectedDay > today;
+        
+        //int latestQueue = _presenter.GetLastQueueIndexForDay(contract, selectedDay);
 
+        // if (latestQueue >= 1)
+        // {
+        //     copyLastQueueGo.SetActive(true);
+        //     copyLastQueueText.text = $"{latestQueue + 1}";
+        // }
+        // else
+        //     copyLastQueueGo.SetActive(false);
+        
         SetupButtons(contract, isFuture, selectedDay, today);
         CloseSetUpButtons();
         //ResetSwipePosition();
@@ -80,81 +106,98 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
     private void SetupButtons(SmartContractModel contract, bool isFuture, DateTime selectedDay, DateTime today)
     {
         sellButton?.onClick.RemoveAllListeners();
+        declineButton?.onClick.RemoveAllListeners();
         deleteButton?.onClick.RemoveAllListeners();
         editButton?.onClick.RemoveAllListeners();
 
-        editButton?.onClick.AddListener(() => { _presenter?.EditContract(contract.Id); });
-        deleteButton?.onClick.AddListener(() => _presenter?.DeleteContract(contract.Id));
-        
-        settingButton?.onClick.AddListener(() =>
+        declineButton?.onClick.AddListener(() => { _adminPresenter?.AdminDeclineContract(contract.Id); });
+        editButton?.onClick.AddListener(() =>
         {
-            if (_isSettingOn)
-                CloseSetUpButtons();
-            else
-                OpenSetUpButtons();
+            CloseSetUpButtons();
+            _adminPresenter?.EditContract(contract.Id);
         });
+        deleteButton?.onClick.AddListener(() => _adminPresenter?.DeleteContract(contract.Id));
         
-        // editButton?.onClick.AddListener(() =>
-        // {
-        //     _presenter?.EditContract(contract.Id);
-        //     //if (_isSwipedOpen)
-        //         //CloseDeleteSwipe();
-        //     //else
-        //         //_presenter?.EditContract(contract.Id);
-        // });
+        declineButtonContainer?.gameObject.SetActive(false);
+        clock.SetActive(false);
 
-        bool isAdmin = UserSession.IsAdmin;
-        var state = contract.GetStateOnDate(selectedDay, isAdmin);
+        if (settingButton != null)
+        {
+            settingButton.interactable = _isAdmin;
+            
+            settingButton?.onClick.AddListener(() =>
+            {
+                if (_isSettingOn)
+                    CloseSetUpButtons();
+                else
+                    OpenSetUpButtons();
+            });
+        }
+        
+        var state = contract.GetStateOnDate(selectedDay, _isAdmin);
         bool isTodayOrPast = selectedDay <= today;
         bool canShowSell = isTodayOrPast && !isFuture;
 
-        // === Set colors ===
-        Color buttonColor = state switch
-        {
-            SmartContractState.ReadyToSell => greenColor,
-            SmartContractState.ReadyToConfirm => Color.cyan,
-            SmartContractState.ReadyToBuy => redColor,
-            SmartContractState.Completed or SmartContractState.Purchased => greyColor,
-            _ => greyColor
-        };
-
         // === Edit icon ===
         editIcon.SetActive(isFuture);
+        //rewardText.gameObject.SetActive(!isFuture);
 
         // === SELL BUTTON ===
-        if (sellButton != null)
+        sellBtnContainer?.gameObject.SetActive(canShowSell);
+
+        if (canShowSell && _presenter != null)
         {
-            //sellButton.interactable = isAdmin || selectedDay >= today;
-            
-            sellButton.gameObject.SetActive(canShowSell);
-            sellButton.GetComponent<Image>().color = buttonColor;
-
-            if (canShowSell && _presenter != null)
+            switch (state)
             {
-                switch (state)
-                {
-                    case SmartContractState.Completed:
-                        sellButton.onClick.AddListener(() => _presenter.UndoConfirmContract(contract.Id));
-                        break;
-                    case SmartContractState.Purchased:
-                        sellButton.onClick.AddListener(() => _presenter.UndoChildBuyAdminSellContract(contract.Id));
-                        break;
-                    case SmartContractState.ReadyToBuy:
-                        sellButton.onClick.AddListener(() => _presenter.ChildBuyAdminSellContract(contract.Id));
-                        sellButtonText.text = isAdmin ? "Sell" : "Buy";
-                        break;
-                    default:
-                        sellButton.onClick.AddListener(() => _presenter.ConfirmContract(contract.Id));
-                        sellButtonText.text = isAdmin ? "Confirm" : "Sell";
-                        break;
-                }
+                case SmartContractState.Completed:
+                    sellButton.GetComponent<Image>().color = greyColor;
+                    sellButton.onClick.AddListener(() => _presenter.UndoConfirmContractByRole(contract.Id));
+                    break;
+                case SmartContractState.Purchased:
+                    sellButton.GetComponent<Image>().color = greyColor;
+                    sellButton.onClick.AddListener(() => _presenter.UndoPurchaseContract(contract.Id));
+                    break;
+                case SmartContractState.ReadyToSell:
+                    sellButtonText.gameObject.SetActive(true);
+                    sellButton.GetComponent<Image>().color = cyanColor;
+                    sellButtonText.text = _isAdmin ? "Buy" : "Sell";
+                    sellButton.onClick.AddListener(() => _presenter.ConfirmContractByRole(contract.Id));
+                    break;
+                case SmartContractState.ReadyToConfirm:
+                    sellButton.GetComponent<Image>().color = _isAdmin ? greenColor : lightGreyColor;
+                    if (_isAdmin)
+                    {
+                        sellButton.onClick.AddListener(() => _presenter.ConfirmContractByRole(contract.Id));
+                        sellButtonText.gameObject.SetActive(true);
+                        sellButtonText.text = "Confirm";
+                        clock.SetActive(false);
+                        declineButtonContainer?.gameObject.SetActive(true);
+                    }
+                    else
+                    {
+                        sellButton.onClick.AddListener(() => _presenter.UndoConfirmContractByRole(contract.Id));
+                        sellButtonText.gameObject.SetActive(false);
+                        clock.SetActive(true);
+                    }
+                    break;
+                case SmartContractState.ReadyToBuy:
+                    sellButton.GetComponent<Image>().color = redColor;
+                    sellButton.onClick.AddListener(() => _presenter.ChildBuyAdminSellContract(contract.Id));
+                    sellButtonText.gameObject.SetActive(true);
+                    sellButtonText.text = _isAdmin ? "Sell" : "Buy";
+                    if(!_isAdmin)
+                        rewardText?.SetText($"-{contract.RewardAmount:F2}");
+                    break;
+                default:
+                    sellButton.GetComponent<Image>().color = !_isAdmin ? greenColor : lightGreyColor;
+                    //sellButton.onClick.AddListener(() => _presenter.ConfirmContractByRole(contract.Id));
+                    break;
             }
-
-            // === Button icons and text ==
-            sellButtonText.gameObject.SetActive(state is SmartContractState.ReadyToSell or SmartContractState.ReadyToBuy or SmartContractState.ReadyToConfirm);
-            check.SetActive(state is SmartContractState.Completed or SmartContractState.Purchased);
-            coin.SetActive(state == SmartContractState.Purchased);
         }
+
+        // === Button icons and text ==
+        check.SetActive(state is SmartContractState.Completed or SmartContractState.Purchased);
+        coin.SetActive(state is SmartContractState.Purchased);
 
         // === Dim if done ===
         if (canvasGroup != null)

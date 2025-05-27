@@ -26,7 +26,7 @@ public class SmartContractCreationStep1 : MonoBehaviour
 
     private List<SmartContractPreset> _presetList;
     
-    private AdminDashboardPresenter _presenter;
+    private IAdminDashboardPresenter _presenter;
 
     [SerializeField] private ContractIconPickerUI contractIconPickerUI;
     
@@ -58,7 +58,7 @@ public class SmartContractCreationStep1 : MonoBehaviour
         OnPresetSaved -= RefreshPresetList;
     }
 
-    public void Initialize(AdminDashboardPresenter presenter)
+    public void Initialize(IAdminDashboardPresenter presenter)
     {
         _presenter = presenter;
         otherSettingsPanel.Initialize(presenter);

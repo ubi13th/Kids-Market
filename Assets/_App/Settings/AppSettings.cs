@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using _App.AdminDashboard;
+using _App.Dashboard;
 using _App.Services;
 using TMPro;
 using UnityEngine;
@@ -11,10 +12,14 @@ namespace _App.Settings
     public class AppSettings : MonoBehaviour
     {
         [SerializeField] private TMP_Dropdown weekStartDropdown;
-        private AdminDashboardPresenter _presenter;
+        private IAdminDashboardPresenter  _adminPresenter;
         
-        public void Initialize(AdminDashboardPresenter presenter) => 
-            _presenter = presenter;
+        public void Initialize(IDashboardPresenter presenter)
+        {
+            // Only set if the presenter supports admin settings
+            if (presenter is IAdminDashboardPresenter admin)
+                _adminPresenter = admin;
+        }
 
         private void Start()
         {
@@ -50,8 +55,8 @@ namespace _App.Settings
             Debug.Log($"📆 Week now starts on: {newStartDay}");
 
             // ✅ Rebuild calendar if active
-            if (_presenter != null)
-                _presenter.SaveWeekStartsOnData(newStartDay);
+            if (_adminPresenter != null)
+                _adminPresenter.SaveWeekStartsOnData(newStartDay);
             else
                 Debug.LogWarning("⚠️ AdminDashboardPresenter not set. Calendar UI not refreshed.");
         }

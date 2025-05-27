@@ -27,13 +27,13 @@ public class ChildJoinHandler : MonoBehaviour
         {
             if (task.IsCompletedSuccessfully)
             {
-                Debug.Log("✅ Child signed in anonymously.");
+                SafeLog("✅ Child signed in anonymously.");
                 statusText.text = "Signed in. Enter your name and join code.";
                 TryAutoLogin();
             }
             else
             {
-                Debug.LogError("❌ Anonymous sign-in failed: " + task.Exception);
+                SafeLog("❌ Anonymous sign-in failed: " + task.Exception);
                 statusText.text = "Failed to sign in.";
             }
         });
@@ -43,7 +43,7 @@ public class ChildJoinHandler : MonoBehaviour
     {
         string savedChildUID = PlayerPrefs.GetString(AppConstants.ChildUID, "");
 
-        Debug.Log($"✅ TryAutoLogin Saved Child UID = {savedChildUID}");
+        SafeLog($"✅ TryAutoLogin Saved Child UID = {savedChildUID}");
 
         if (string.IsNullOrEmpty(savedChildUID))
             return;
@@ -52,13 +52,13 @@ public class ChildJoinHandler : MonoBehaviour
         {
             if (task.IsCompletedSuccessfully && task.Result.Exists)
             {
-                Debug.Log("✅ Auto-login successful.");
+                SafeLog("✅ Auto-login successful.");
                 SceneLoader.LoadHomeScene();
                 //SceneLoader.LoadChildDashboardScene();
             }
             else
             {
-                Debug.Log("⚠️ No saved child found.");
+                SafeLog("⚠️ No saved child found.");
                 PlayerPrefs.DeleteKey(AppConstants.ChildUID);
             }
         });
@@ -99,7 +99,7 @@ public class ChildJoinHandler : MonoBehaviour
             }
             else
             {
-                Debug.LogError("❌ Error fetching children: " + task.Exception);
+                SafeLog("❌ Error fetching children: " + task.Exception);
                 statusText.text = "Could not validate join code.";
             }
         });
@@ -117,10 +117,19 @@ public class ChildJoinHandler : MonoBehaviour
         PlayerPrefs.SetString(AppConstants.AdminUID, adminUID);
         PlayerPrefs.Save();
 
-        Debug.Log("✅ Device assigned to child UID: " + childUID);
+        SafeLog("✅ Device assigned to child UID: " + childUID);
         SceneLoader.LoadHomeScene();
         //SceneLoader.LoadChildDashboardScene();
     }
+    
+    private void SafeLog(string message)
+    {
+        if (SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
+            Debug.Log(message);
+        else
+            Debug.Log("🕓 Delayed log (graphics not ready): " + message);
+    }
+
 
     /*private void TryAutoLogin()
     {

@@ -4,9 +4,11 @@ using TMPro;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using _App.AdminDashboard;
 using _App.Bootstrap;
+using _App.Services;
 using Firebase.Extensions;
 
 
@@ -36,6 +38,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
     [SerializeField] private Button openIconPickerButton;
     [SerializeField] private Button rewardPlusButton;
     [SerializeField] private Button rewardMinusButton;
+    [SerializeField] private Button dueTimeButton;
     [SerializeField] private Button saveButton;
     [SerializeField] private Button deleteButton;
     [SerializeField] private Button weekDaysButtonPrefab;
@@ -77,46 +80,37 @@ public class SmartContractCreationStep2 : MonoBehaviour
     [SerializeField] private GameObject calendarPanel;
     [SerializeField] private GameObject repeatDropdownBlock;
     [SerializeField] private GameObject dueTimeSelectorPanel;
-    //[SerializeField] private GameObject weekDaysToggleBlock;
     [SerializeField] private GameObject iconNamePanel;
     [SerializeField] private GameObject contractCreatorPanel;
     [SerializeField] private GameObject rewardBlock;
-    
-    [SerializeField] private ScrollRect hourScroll;
-    [SerializeField] private RectTransform hourContent;
-    [SerializeField] private GameObject hourItemPrefab;
-    [SerializeField] private ScrollRect minuteScroll;
-    [SerializeField] private RectTransform minuteContent;
-    [SerializeField] private GameObject minuteItemPrefab;
-    
-    [SerializeField] private InfiniteScrollTimePicker hourPicker;
-    [SerializeField] private InfiniteScrollTimePicker minutePicker;
-
-    private float _hourItemHeight;
-    private float _minuteItemHeight;
-    //private int _selectedHour = 0;
-    //private int _selectedMinute = 0;
-    private bool _snappingHour;
-    private bool _snappingMinute;
-    private bool _isMinuteDragging;
+    [SerializeField] private ScrollMechanic hourScroll;
+    [SerializeField] private ScrollMechanic minuteScroll;
 
     [SerializeField] private SmartContractCreationStep1 step1;
     [SerializeField] private ContractIconPickerUI contractIconPickerUI;
+
+    [SerializeField] private Scrollbar scrollbar;
+    
+    [Header("Tick Sound")]
+    [SerializeField] private AudioClip tickSound;
+    [SerializeField] private AudioSource hourAudioSource;
+    [SerializeField] private AudioSource minuteAudioSource;
+    private int _lastDisplayedHour = -1;
+    private int _lastDisplayedMinute = -1;
 
     private float _childBalance;
     private float _rewardAmount;
     private RewardType _currentRewardType;
 
+    private bool _isDueTimeSelectorOn = false;
+    
     private DateTime _dueTime;
-    private AdminDashboardPresenter _presenter;
+    private IAdminDashboardPresenter _presenter;
     private DateTime _shownMonth;
     
     private readonly Dictionary<string, bool> _assignedChildrenList = new(); // key = UID
     
     private Coroutine _delayedRedraw;
-
-    //private readonly List<(Button button, DateTime date)> _calendarButtonData = new();
-    //private List<DayOfWeek> _sharedRepeatDays = new();
 
     private DateTime _selectedDate;
     private readonly Color _orangeColor = new Color(1f, 0.6f, 0f);       // Today
@@ -136,6 +130,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
         openIconPickerButton.onClick.RemoveAllListeners();
         rewardPlusButton.onClick.RemoveAllListeners();
         rewardMinusButton.onClick.RemoveAllListeners();
+        dueTimeButton.onClick.RemoveAllListeners();
         saveButton.onClick.RemoveAllListeners();
         deleteButton.onClick.RemoveAllListeners();
         backButton.onClick.RemoveAllListeners();
@@ -160,7 +155,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
         rewardInputField.onValidateInput -= ValidateRewardInput;
     }
 
-    public void Initialize(AdminDashboardPresenter presenter)
+    public void Initialize(IAdminDashboardPresenter presenter)
     {
         _presenter = presenter;
     }
@@ -173,6 +168,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
         openIconPickerButton.onClick.AddListener(OpenContractIconPicker);
         rewardPlusButton.onClick.AddListener(() => AdjustReward(+1));
         rewardMinusButton.onClick.AddListener(() => AdjustReward(-1));
+        dueTimeButton.onClick.AddListener(OpenCloseDueTimeSelector);
         saveButton.onClick.AddListener(SaveContract);
         deleteButton.onClick.AddListener(DeleteDraft);
         backButton.onClick.AddListener(CloseSettingsPanel);
@@ -225,7 +221,8 @@ public class SmartContractCreationStep2 : MonoBehaviour
         _dueTime = SmartContractDraft.StartDate == default ? DateTime.UtcNow.AddDays(1) : SmartContractDraft.StartDate;
         dueTimeText.text = _dueTime.ToLocalTime().ToString(@"hh\:mm");
         dueTimeToggle.isOn = false;
-        dueTimeSlider.SetActive(false);
+        if(SmartContractDraft.DueTime != TimeSpan.Zero)
+            SetTime(SmartContractDraft.DueTime.Hours, SmartContractDraft.DueTime.Minutes, true);
         
         // Toggles
         photoProofToggle.isOn = SmartContractDraft.RequiresPhotoProof;
@@ -267,9 +264,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
         
         repeatDropdown.onValueChanged.AddListener(OnRepeatModeValueChanged);
 
-        dueTimeSlider.SetActive(SmartContractDraft.DueTime != TimeSpan.Zero);
-        CloseDueTimeSelectionPanel();
-        SetTime(SmartContractDraft.DueTime.Hours, SmartContractDraft.DueTime.Minutes);
+        scrollbar.value = 1;
     }
 
     private void OpenContractIconPicker()
@@ -372,72 +367,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
     
     //------------------- Children Selection Options -------------------------
     
-    // private void OpenCloseAssignsSelectionButtonsBlock()
-    // {
-    //     string originalAssignedUid = SmartContractDraft.AssignedToUid;
-    //
-    //     // Get selected UIDs (multi-child support)
-    //     var selected = _assignedChildrenList.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
-    //     assignsSelectionButtonsBlock.SetActive(selected.Count > 1 && !string.IsNullOrEmpty(originalAssignedUid));
-    //
-    //     if (selected.Count > 1 && !string.IsNullOrEmpty(originalAssignedUid))
-    //         OnEveryoneSelected();
-    // }
     
-    //private void HighlightButtons(Image buttonBg, bool isSelected) => 
-        //buttonBg.color = isSelected ? _greyColor : _darkGreyColor;
-
-    /*private void OnRotateSelected(List<ChildModel> allChildren)
-    {
-        assignsOptionDescriptionText.text = "Takes turns on specific days.";
-        childRotateContainer.gameObject.SetActive(true);
-        SmartContractDraft.RepeatDaysPerChild.Clear();
-
-        foreach (Transform child in childRotateContainer)
-            Destroy(child.gameObject);
-
-        foreach (var child in allChildren)
-        {
-            if (!_assignedChildrenList.TryGetValue(child.Uid, out bool isSelected) || !isSelected)
-                continue;
-
-            var rotateBlock = Instantiate(childRotateBlockPrefab, childRotateContainer);
-            var avatar = Instantiate(assignChildAvatarRotatePrefab, rotateBlock.transform.GetChild(0));
-            avatar.GetComponentInChildren<TextMeshProUGUI>().text = child.DisplayName;
-
-            var dayButtonRow = rotateBlock.transform.GetChild(1); // for days container
-            SmartContractDraft.RepeatDaysPerChild[child.Uid] = new();
-            
-            DayOfWeek[] orderedDays = new[]
-            {
-                DayOfWeek.Monday,
-                DayOfWeek.Tuesday,
-                DayOfWeek.Wednesday,
-                DayOfWeek.Thursday,
-                DayOfWeek.Friday,
-                DayOfWeek.Saturday,
-                DayOfWeek.Sunday
-            };
-
-            foreach (DayOfWeek day in orderedDays)
-            {
-                var btn = Instantiate(weekDaysButtonPrefab, dayButtonRow);
-                btn.transform.Find("Day")?.GetComponent<TextMeshProUGUI>().SetText(day.ToString().Substring(0, 1));
-                HighlightDayButton(btn, false);
-
-                btn.onClick.AddListener(() =>
-                {
-                    var list = SmartContractDraft.RepeatDaysPerChild[child.Uid];
-                    if (list.Contains(day))
-                        list.Remove(day);
-                    else
-                        list.Add(day);
-
-                    HighlightDayButton(btn, list.Contains(day));
-                });
-            }
-        }
-    }*/
     
     // ----------------- Reward ----------------------
     private void LoadChildRewardConfig(string childUid)
@@ -628,14 +558,8 @@ public class SmartContractCreationStep2 : MonoBehaviour
         // 🗓 Set up weekday buttons
         var dayButtonRow = rotateBlock.transform.GetChild(1);
         SmartContractDraft.RepeatDaysPerChild[childUid] = new List<DayOfWeek>(preselectedDays);
-
-        DayOfWeek[] orderedDays = new[]
-        {
-            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
-            DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
-        };
-
-        foreach (var day in orderedDays)
+        
+        foreach (DayOfWeek day in DateService.OrderedDaysOfWeek)
         {
             var btn = Instantiate(weekDaysButtonPrefab, dayButtonRow);
             btn.transform.Find("Day")?.GetComponent<TextMeshProUGUI>().SetText(day.ToString().Substring(0, 1));
@@ -651,65 +575,12 @@ public class SmartContractCreationStep2 : MonoBehaviour
                     list.Add(day);
 
                 HighlightDayButton(btn, list.Contains(day));
-                
+
                 var sharedDays = GetSharedRepeatDays();
                 UpdateRepeatLabelFromSelectedDays(sharedDays);
             });
         }
     }
-
-    
-    
-    
-    
-    
-    
-    /*private void OpenWeekDayTogglesBlock(List<DayOfWeek> preselectedDays = null)
-    {
-        weekDaysToggleBlock.SetActive(true);
-
-        foreach (Transform child in weekDaysToggleBlock.transform)
-            Destroy(child.gameObject);
-
-        _calendarButtonData.Clear();
-
-        // ✅ Use provided days or fallback
-        _sharedRepeatDays = preselectedDays != null 
-            ? new List<DayOfWeek>(preselectedDays) 
-            : GetSharedRepeatDays();
-
-        DayOfWeek[] orderedDays = new[]
-        {
-            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
-            DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
-        };
-
-        foreach (DayOfWeek day in orderedDays)
-        {
-            var button = Instantiate(weekDaysButtonPrefab, weekDaysToggleBlock.transform);
-            button.transform.Find("Day")?.GetComponent<TextMeshProUGUI>().SetText(day.ToString().Substring(0, 1));
-
-            _calendarButtonData.Add((button, DateTime.Today)); // dummy
-
-            HighlightDayButton(button, _sharedRepeatDays.Contains(day));
-
-            DayOfWeek capturedDay = day;
-
-            button.onClick.AddListener(() =>
-            {
-                if (_sharedRepeatDays.Contains(capturedDay))
-                    _sharedRepeatDays.Remove(capturedDay);
-                else
-                    _sharedRepeatDays.Add(capturedDay);
-
-                ApplyRepeatDaysToAllSelectedChildren(_sharedRepeatDays);
-                HighlightDayButton(button, _sharedRepeatDays.Contains(capturedDay));
-                UpdateRepeatLabelFromSelectedDays(_sharedRepeatDays);
-            });
-        }
-
-        UpdateRepeatLabelFromSelectedDays(_sharedRepeatDays);
-    }*/
     
     private void OnRepeatModeValueChanged(int value)
     {
@@ -735,23 +606,8 @@ public class SmartContractCreationStep2 : MonoBehaviour
             case RepeatType.SpecificDays:
                 OpenRepeatDaysEditor();
                 break;
-
-
-            // case RepeatType.SpecificDays:
-            //     var sharedDays = GetSharedRepeatDays();
-            //     OpenWeekDayTogglesBlock(sharedDays);
-            //     break;
         }
     }
-    
-    // private void ApplyRepeatDaysToAllSelectedChildren(List<DayOfWeek> days)
-    // {
-    //     foreach (var kvp in _assignedChildrenList)
-    //     {
-    //         if (!kvp.Value) continue; // only selected children
-    //         SmartContractDraft.RepeatDaysPerChild[kvp.Key] = new List<DayOfWeek>(days);
-    //     }
-    // }
     
     private List<DayOfWeek> GetSharedRepeatDays()
     {
@@ -818,46 +674,114 @@ public class SmartContractCreationStep2 : MonoBehaviour
         childRotateContainer.gameObject.SetActive(false);
 
     //-------------------- Due Time ---------------------------
-
-    private void SetTime(int hour, int minute)
+    
+    private void OpenCloseDueTimeSelector()
     {
-        hourPicker.ScrollToValue(hour);
-        minutePicker.ScrollToValue(minute);
-        UpdateDisplay();
+        if (_isDueTimeSelectorOn)
+            CloseDueTimeSelectionPanel();
+        else
+            OpenDueTimeSelectionPanel();
     }
 
-    private void UpdateDisplay()
+    private void SetTime(int hour, int minute, bool isSliderOn)
+    {
+        dueTimeToggle.isOn = isSliderOn;
+        dueTimeText.text = $"{hour:D2}:{minute:D2}";
+    }
+
+    private void UpdateDueTimeDisplay()
     {
         if (dueTimeText != null)
-            dueTimeText.text = $"{hourPicker.GetSelectedValue():D2}:{minutePicker.GetSelectedValue():D2}";
+        {
+            int hour = hourScroll.GetCurrentValue();
+            int minute = minuteScroll.GetCurrentValue();
+
+            // 🟢 Check if value changed
+            if (hour != _lastDisplayedHour)
+            {
+                // ✅ Play tick sound
+                PlayHourTickSound();
+                _lastDisplayedHour = hour;
+            }
+            
+            if (minute != _lastDisplayedMinute)
+            {
+                // ✅ Play tick sound
+                PlayMinuteTickSound();
+                _lastDisplayedMinute = minute;
+            }
+
+            dueTimeText.text = $"{hour:D2}:{minute:D2}";
+        }
+    }
+
+    private void PlayHourTickSound()
+    {
+        if (tickSound != null && hourAudioSource != null) 
+            hourAudioSource.PlayOneShot(tickSound);
+    }
+    
+    private void PlayMinuteTickSound()
+    {
+        if (tickSound != null && minuteAudioSource != null) 
+            minuteAudioSource.PlayOneShot(tickSound);
     }
 
     private void Update()
     {
-        UpdateDisplay();
+        if(!_isDueTimeSelectorOn)
+            return;
+        UpdateDueTimeDisplay();
     }
     
     private void OnDueTimeToggleChanged(bool isOn)
     {
         dueTimeSlider.SetActive(isOn);
-        dueTimeSelectorPanel.SetActive(isOn);
 
-        if (isOn)
+        if (!isOn) 
+            return;
+        
+        OpenDueTimeSelectionPanel();
+    }
+    
+    private void OpenDueTimeSelectionPanel()
+    {
+        dueTimeSelectorPanel.SetActive(true);
+        StartCoroutine(InitializeScrollValuesNextFrame());
+    }
+    
+    private IEnumerator InitializeScrollValuesNextFrame()
+    {
+        yield return null; // Wait one frame for UI to rebuild
+        yield return new WaitForSeconds(0.5f);
+
+        if (SmartContractDraft.DueTime != TimeSpan.Zero)
         {
-            hourPicker.enabled = true;
-            minutePicker.enabled = true;
-            // Optionally: set picker to current saved time
+            int hour = SmartContractDraft.DueTime.Hours;
+            int minute = SmartContractDraft.DueTime.Minutes;
+
+            hourScroll.ScrollToValue(hour);
+            minuteScroll.ScrollToValue(minute);
         }
+        
+        yield return new WaitForSeconds(0.5f);
+
+        _isDueTimeSelectorOn = true;
     }
 
-    private void CloseDueTimeSelectionPanel() => 
+    private void CloseDueTimeSelectionPanel()
+    {
+        _isDueTimeSelectorOn = false;
         dueTimeSelectorPanel.SetActive(false);
+    }
 
     private void SaveDueTime()
     {
-        var hour = hourPicker.GetSelectedValue();
-        var minute = minutePicker.GetSelectedValue();
+        int hour = hourScroll.GetCurrentValue();     // E.g., returns 13 for "13"
+        int minute = minuteScroll.GetCurrentValue(); // E.g., returns 30 for "30"
+
         SmartContractDraft.SetDueTime(new TimeSpan(hour, minute, 0));
+        Debug.Log($"⏰ Saved DueTime: {hour:D2}:{minute:D2}");
     }
 
     //--------------------- Toggles ---------------------------
@@ -926,6 +850,129 @@ public class SmartContractCreationStep2 : MonoBehaviour
             .Select(kv => kv.Key)
             .ToList();
 
+        // If none selected, fallback to the originally assigned
+        if (selectedKids.Count == 0 && !string.IsNullOrEmpty(originalAssignedUid))
+            selectedKids.Add(originalAssignedUid);
+
+        foreach (var childUid in selectedKids)
+        {
+            // In edit mode, skip unintended children
+            if (!step1.isCreatingNewContract && childUid != originalAssignedUid)
+                continue;
+
+            var contract = BuildContract(childUid, originalAssignedUid, originalId);
+            contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
+            _presenter.SaveContract(contract);
+        }
+
+        if (saveAsPresetToggle != null && saveAsPresetToggle.isOn)
+            SavePreset();
+
+        Debug.Log($"✅ Contract(s) saved for {selectedKids.Count} child(ren): {SmartContractDraft.Title}");
+
+        SmartContractDraft.Reset();
+        gameObject.SetActive(false);
+        contractCreatorPanel.SetActive(false);
+    }
+
+    private SmartContractModel BuildContract(string childUid, string originalAssignedUid, string originalId)
+    {
+        var mode = SmartContractDraft.RepeatMode;
+
+        var repeatDays = SmartContractDraft.RepeatDaysPerChild.TryGetValue(childUid, out var value)
+            ? value
+            : SmartContractDraft.RepeatDaysPerChild.Values.FirstOrDefault() ?? new List<DayOfWeek>();
+        
+        string dueTimeStr;
+        try
+        {
+            dueTimeStr = SmartContractDraft.DueTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+        }
+        catch (FormatException e)
+        {
+            Debug.LogWarning($"⚠️ Invalid due time format: {e.Message}. Defaulting to 00:00");
+            dueTimeStr = "00:00";
+        }
+
+        return new SmartContractModel
+        {
+            Title = SmartContractDraft.Title,
+            IconPath = SmartContractDraft.IconPath,
+            RewardAmount = SmartContractDraft.RewardAmount,
+            RequirePhotoProof = SmartContractDraft.RequiresPhotoProof,
+            RequireParentalApproval = SmartContractDraft.RequiresParentalApproval,
+            RequireNotificationOnThisDevice = SmartContractDraft.RequireNotificationOnThisDevice,
+            RepeatMode = mode,
+            RepeatDays = repeatDays,
+            StartDate = SmartContractDraft.StartDate.ToString("yyyy-MM-dd"),
+            DueTime = dueTimeStr,
+            AssignedToUid = childUid,
+            AdminUID = _presenter.AdminUID,
+            Id = (childUid == originalAssignedUid && !string.IsNullOrEmpty(originalId)) ? originalId : null
+        };
+    }
+
+    private void SavePreset()
+    {
+        string dueTimeStr;
+        try
+        {
+            dueTimeStr = SmartContractDraft.DueTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+        }
+        catch (FormatException e)
+        {
+            Debug.LogWarning($"⚠️ Invalid due time format: {e.Message}. Defaulting to 00:00");
+            dueTimeStr = "00:00";
+        }
+        
+        var preset = new SmartContractCustomPreset
+        {
+            title = SmartContractDraft.Title,
+            iconPath = SmartContractDraft.IconPath,
+            defaultReward = SmartContractDraft.RewardAmount,
+            startDate = SmartContractDraft.StartDate.ToString("yyyy-MM-dd"),
+            dueTime = dueTimeStr,
+            repeatMode = SmartContractDraft.RepeatMode,
+            repeatDays = new List<DayOfWeek>(
+                SmartContractDraft.RepeatDaysPerChild.Values.FirstOrDefault() ?? new List<DayOfWeek>()
+            ),
+            requiresPhotoProof = SmartContractDraft.RequiresPhotoProof,
+            requiresParentalApproval = SmartContractDraft.RequiresParentalApproval,
+            requireNotificationOnThisDevice = SmartContractDraft.RequireNotificationOnThisDevice
+        };
+
+        PresetStorage.SavePreset(preset);
+        SmartContractCreationStep1.OnPresetSaved?.Invoke();
+    }
+
+    /*private void SaveContract()
+    {
+        if (_rewardAmount <= 0f)
+        {
+            Debug.LogWarning("⚠️ Reward must be greater than 0.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(contractTitleText.text))
+        {
+            Debug.LogWarning("⚠️ Contract title is required.");
+            return;
+        }
+
+        SmartContractDraft.Title = contractTitleText.text;
+        SmartContractDraft.SetStartDate(SmartContractDraft.StartDate.Date);
+
+        if (dueTimeToggle.isOn)
+            SaveDueTime();
+
+        string originalId = SmartContractDraft.Id;
+        string originalAssignedUid = SmartContractDraft.AssignedToUid;
+
+        var selectedKids = _assignedChildrenList
+            .Where(kv => kv.Value)
+            .Select(kv => kv.Key)
+            .ToList();
+
         if (selectedKids.Count == 0 && !string.IsNullOrEmpty(originalAssignedUid))
             selectedKids.Add(originalAssignedUid);
 
@@ -958,12 +1005,8 @@ public class SmartContractCreationStep2 : MonoBehaviour
                 AdminUID = _presenter.AdminUID,
                 Id = (childUid == originalAssignedUid && !string.IsNullOrEmpty(originalId)) ? originalId : null
             };
-
-            var state = UserSession.IsAdmin
-                ? SmartContractState.ReadyToConfirm
-                : SmartContractState.ReadyToSell;
-
-            contract.SetStateOnDate(SmartContractDraft.StartDate, state);
+            
+            contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
             _presenter.SaveContract(contract);
         }
 
@@ -990,7 +1033,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
         SmartContractDraft.Reset();
         gameObject.SetActive(false);
         contractCreatorPanel.SetActive(false);
-    }
+    }*/
     
     //------------------------------------------------
     

@@ -43,9 +43,17 @@ namespace _App.Services
             return referenceDay.AddDays(-diff).Date;
         }
 
-        public bool IsSameWeek(DateTime a, DateTime b)
+        public bool IsSameWeek(DateTime a, DateTime b) => 
+            GetWeekStart(a) == GetWeekStart(b);
+        
+        public static DayOfWeek[] OrderedDaysOfWeek
         {
-            return GetWeekStart(a) == GetWeekStart(b);
+            get
+            {
+                return Enumerable.Range(0, 7)
+                    .Select(i => (DayOfWeek)(((int)WeekStartsOn + i) % 7))
+                    .ToArray();
+            }
         }
 
         DayOfWeek IDateService.WeekStartsOn => WeekStartsOn;

@@ -1,9 +1,10 @@
-using System;
+/*using System;
 using System.Collections.Generic;
+using _App.Dashboard;
 
 namespace _App.AdminDashboard
 {
-    public interface IAdminDashboardView
+    public interface IAdminDashboardView : IDashboardPresenter
     {
         void ShowChildren(List<ChildModel> children);
         void ShowCurrentChild(ChildModel child);
@@ -25,5 +26,7 @@ namespace _App.AdminDashboard
         void SelectToday();
         void ShowGroupedContracts(Dictionary<RepeatType, List<SmartContractModel>> grouped);
         void SetupCalendarButtons();
+        void OnAdminSurpriseButtonClick();
+        void OnChildSurpriseButtonClick();
     }
-}
+}*/

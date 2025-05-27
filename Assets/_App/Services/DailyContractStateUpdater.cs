@@ -12,7 +12,7 @@ namespace _App.Services
         private bool _hasRunToday = false;
         private DateTime _lastRunDate;
 
-        private const int MaxDaysToKeep = 31; // 🔧 Keep only last N days of state history
+        private const int MaxDaysToKeep = 31;
 
         public void Run(string userUid, bool isAdmin = true)
         {
@@ -35,7 +35,7 @@ namespace _App.Services
                 }
 
                 DateTime today = DateTime.Today;
-                DateTime yesterday = today.AddDays(-1);
+                DateTime cutoff = today.AddDays(-MaxDaysToKeep);
                 int updatedCount = 0;
 
                 foreach (var snapshot in task.Result.Children)
@@ -46,58 +46,87 @@ namespace _App.Services
                         var contract = JsonUtility.FromJson<SmartContractModel>(json);
                         contract.Id = snapshot.Key;
 
-                        if (!DateTime.TryParse(contract.StartDate, out _))
+                        if (string.IsNullOrEmpty(contract.StartDate) || !DateTime.TryParse(contract.StartDate, out _))
                             continue;
 
-                        // ✅ Only handle EveryDay or SpecificDays
+                        // ───────────────────── Once ─────────────────────
+                        if (contract.RepeatMode == RepeatType.Once)
+                        {
+                            if (contract.GetStartDate().Date == today)
+                            {
+                                contract.LoadStateHistory();
+                                if (!contract.HasStateOnDate(today))
+                                {
+                                    contract.SetStateOnDate(today, SmartContractState.ReadyToSell);
+                                    contract.SyncStateHistory();
+                                    UpdateStateHistoryInFirebase(refToContracts, contract);
+                                    Debug.Log($"🟢 Once contract set to ReadyToSell: {contract.Title}");
+                                }
+                            }
+
+                            continue;
+                        }
+
+                        // ───────────────────── AsNeeded ─────────────────────
+                        if (contract.RepeatMode == RepeatType.AsNeeded)
+                        {
+                            contract.LoadStateHistory();
+                            if (!contract.HasStateOnDate(today))
+                            {
+                                contract.SetStateOnDate(today, SmartContractState.ReadyToSell);
+                                contract.SyncStateHistory();
+                                UpdateStateHistoryInFirebase(refToContracts, contract);
+                                Debug.Log($"🟢 AsNeeded contract activated: {contract.Title}");
+                            }
+
+                            continue;
+                        }
+
+                        // ─────── Skip all others except EveryDay / SpecificDays ───────
                         if (contract.RepeatMode != RepeatType.EveryDay &&
                             contract.RepeatMode != RepeatType.SpecificDays)
-                            continue;
-
-                        if (!contract.IsVisibleOn(yesterday))
                             continue;
 
                         contract.LoadStateHistory();
                         bool shouldSave = false;
 
-                        // 🧹 Remove entries older than MaxDaysToKeep
-                        DateTime cutoff = DateTime.Today.AddDays(-MaxDaysToKeep);
-                        List<string> keysToRemove = new();
+                        // ─── Initialize today's state ───
+                        if (!contract.HasStateOnDate(today) && contract.IsVisibleOn(today))
+                        {
+                            contract.SetStateOnDate(today, SmartContractState.ReadyToSell);
+                            shouldSave = true;
+                        }
+
+                        // ─── Remove stale entries ───
+                        List<string> staleKeys = new();
                         foreach (var entry in contract.StateHistory)
                         {
                             if (DateTime.TryParse(entry.Key, out DateTime entryDate) && entryDate < cutoff)
-                                keysToRemove.Add(entry.Key);
+                                staleKeys.Add(entry.Key);
                         }
-                        foreach (var key in keysToRemove)
+                        foreach (var key in staleKeys)
                             contract.StateHistory.Remove(key);
 
-                        // 🧠 Evaluate yesterday's state
-                        var yesterdayState = contract.GetStateOnDate(yesterday, isAdmin);
+                        // ─── Backfill past days if still visible ───
+                        for (int i = 1; i < MaxDaysToKeep; i++)
+                        {
+                            DateTime pastDate = today.AddDays(-i);
+                            if (pastDate < cutoff || !contract.IsVisibleOn(pastDate))
+                                continue;
 
-                        // ✅ ReadyToConfirm ➜ ReadyToBuy
-                        if (yesterdayState == SmartContractState.ReadyToConfirm)
-                        {
-                            contract.SetStateOnDate(yesterday, SmartContractState.ReadyToBuy);
-                            shouldSave = true;
-                        }
-                        // ✅ ReadyToSell ➜ ReadyToBuy
-                        else if (yesterdayState == SmartContractState.ReadyToSell)
-                        {
-                            contract.SetStateOnDate(yesterday, SmartContractState.ReadyToBuy);
-                            shouldSave = true;
+                            var pastState = contract.GetStateOnDate(pastDate, isAdmin);
+                            if (pastState == SmartContractState.ReadyToSell || pastState == SmartContractState.ReadyToConfirm)
+                            {
+                                contract.SetStateOnDate(pastDate, SmartContractState.ReadyToBuy);
+                                shouldSave = true;
+                            }
                         }
 
                         if (shouldSave)
                         {
                             contract.SyncStateHistory();
                             updatedCount++;
-
-                            var update = new Dictionary<string, object>
-                            {
-                                ["stateHistoryRaw"] = contract.stateHistoryRaw
-                            };
-
-                            refToContracts.Child(contract.Id).UpdateChildrenAsync(update);
+                            UpdateStateHistoryInFirebase(refToContracts, contract);
                         }
                     }
                     catch (Exception ex)
@@ -111,6 +140,16 @@ namespace _App.Services
 
                 Debug.Log($"✅ Daily scan complete. {updatedCount} contract(s) auto-updated.");
             });
+        }
+
+        private void UpdateStateHistoryInFirebase(DatabaseReference refToContracts, SmartContractModel contract)
+        {
+            var update = new Dictionary<string, object>
+            {
+                ["stateHistoryRaw"] = contract.stateHistoryRaw
+            };
+
+            refToContracts.Child(contract.Id).UpdateChildrenAsync(update);
         }
     }
 }

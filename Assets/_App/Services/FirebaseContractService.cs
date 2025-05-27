@@ -1,5 +1,6 @@
 using Firebase.Database;
 using System;
+using System.Threading.Tasks;
 using _App.Bootstrap;
 using Firebase.Extensions;
 using UnityEngine;
@@ -31,7 +32,7 @@ namespace _App.Services
                 return FirebaseInit.DbRef.Child(AppConstants.Contracts);
             }
         }
-
+        
         public void SetContractStateOnDate(string contractId, DateTime date, SmartContractState state, Action<bool> onComplete)
         {
             if (!_isReady)
@@ -55,98 +56,60 @@ namespace _App.Services
             });
         }
 
-        /*public void HideAnyoneContractForToday(string title, string adminUid, string confirmingChildUid, DateTime onDate)
+        public void GetAsNeededCopyByParentId(string parentId, Action<SmartContractModel> callback)
         {
-            ContractsRef.GetValueAsync().ContinueWithOnMainThread(task =>
-            {
-                if (!task.IsCompletedSuccessfully || !task.Result.Exists)
-                {
-                    Debug.LogWarning("❌ Failed to fetch contracts for hiding");
-                    return;
-                }
+            Debug.Log($"🔍 Looking for AsNeeded copy with ParentId = {parentId}");
 
-                var snapshot = task.Result;
-                foreach (var child in snapshot.Children)
-                {
-                    var json = child.GetRawJsonValue();
-                    if (string.IsNullOrEmpty(json))
-                        continue;
-
-                    var contract = JsonUtility.FromJson<SmartContractModel>(json);
-                    contract.Id = child.Key;
-
-                    if (contract == null || contract.IsCopy)
-                        continue;
-
-                    if (contract.AssignmentMode != AssignMode.Anyone)
-                        continue;
-
-                    if (contract.Title != title || contract.AdminUID != adminUid)
-                        continue;
-
-                    if (contract.AssignedToUid == confirmingChildUid)
-                        continue; // Don't hide for the confirming child
-
-                    if (contract.GetStartDate() > onDate.Date)
-                        continue; // Skip future contracts
-
-                    // ✅ Hide this contract for today
-                    contract.SetStateOnDate(onDate, SmartContractState.Hidden);
-                    SaveContract(contract, _ => { });
-                }
-            });
-        }
-        
-        public void RestoreAnyoneContractForToday(string parentId, string undoingChildUid, DateTime day)
-        {
-            if (!_isReady)
-            {
-                Debug.LogWarning("🟡 FirebaseContractService not ready.");
-                return;
-            }
-
-            FirebaseInit.DbRef.Child(AppConstants.Contracts)
+            FirebaseInit.DbRef
+                .Child("Contracts")
                 .OrderByChild("ParentId").EqualTo(parentId)
                 .GetValueAsync()
                 .ContinueWithOnMainThread(task =>
                 {
-                    if (!task.IsCompletedSuccessfully || !task.Result.Exists)
+                    if (!task.IsCompletedSuccessfully)
                     {
-                        Debug.LogWarning($"❌ No child contracts found for ParentId: {parentId}");
+                        Debug.LogError("❌ Firebase task failed.");
+                        callback(null);
                         return;
                     }
 
+                    if (!task.Result.Exists)
+                    {
+                        Debug.Log("📭 No matching contracts found.");
+                        callback(null);
+                        return;
+                    }
+
+                    SmartContractModel foundCopy = null;
+
                     foreach (var snapshot in task.Result.Children)
                     {
+                        Debug.Log($"📦 Checking contract: {snapshot.Key}");
                         var json = snapshot.GetRawJsonValue();
                         var contract = JsonUtility.FromJson<SmartContractModel>(json);
                         contract.Id = snapshot.Key;
-                        contract.LoadStateHistory();
 
-                        if (contract.GetStartDate().Date != day.Date)
-                            continue;
-
-                        SmartContractState restoredState = contract.AssignedToUid == undoingChildUid
-                            ? SmartContractState.ReadyToSell
-                            : SmartContractState.ReadyToConfirm;
-
-                        contract.SetStateOnDate(day, restoredState);
-
-                        SaveContract(contract, success =>
+                        if (contract.IsCopy && contract.RepeatMode == RepeatType.AsNeeded)
                         {
-                            if (success)
-                                Debug.Log($"✅ Restored contract for child: {contract.AssignedToUid}");
-                            else
-                                Debug.LogWarning($"❌ Failed to restore contract: {contract.Id}");
-                        });
+                            if (foundCopy != null)
+                            {
+                                Debug.LogWarning($"⚠️ Multiple AsNeeded copies found. Using first: {foundCopy.Id}");
+                                break;
+                            }
+
+                            foundCopy = contract;
+                            Debug.Log($"✅ Found matching AsNeeded copy: {contract.Id}");
+                        }
+                        else
+                        {
+                            Debug.Log($"⏩ Skipped: IsCopy={contract.IsCopy}, RepeatMode={contract.RepeatMode}");
+                        }
                     }
+
+                    callback(foundCopy);
                 });
         }
-        */
 
-
-
-        
         public void DeleteContract(string contractId, Action<bool> onComplete)
         {
             if (!_isReady)
@@ -170,6 +133,10 @@ namespace _App.Services
             }
             
             contract.SyncStateHistory(); // ✅ Make sure raw string is updated!
+            
+            // ✅ Normalize ParentId BEFORE serialization
+            if (!contract.IsCopy) 
+                contract.ParentId = null; // ✅ Ensure parent contracts don't save empty string
 
             DatabaseReference refToUse;
             if (string.IsNullOrEmpty(contract.Id))
@@ -183,6 +150,8 @@ namespace _App.Services
             }
 
             string json = JsonUtility.ToJson(contract);
+            Debug.Log($"📤 Saving JSON: {json}");
+            
             refToUse.SetRawJsonValueAsync(json)
                 .ContinueWithOnMainThread(task =>
                 {

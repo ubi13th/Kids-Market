@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Firebase.Extensions;
 using _App.Bootstrap;
+using _App.ChildDashboard;
 
 public class AddChildFromAdminUI : MonoBehaviour
 {
@@ -26,9 +27,13 @@ public class AddChildFromAdminUI : MonoBehaviour
 
     private string _avatarPath = AppConstants.DefaultAvatar;
     private RewardType _selectedRewardType = RewardType.None;
+    
+    private IChildService _childService;
 
     private void Awake()
     {
+        _childService = new FirebaseChildService();
+        
         avatarPickButton.onClick.AddListener(OpenAvatarPicker);
         
         saveButton.gameObject.SetActive(true);
@@ -100,7 +105,27 @@ public class AddChildFromAdminUI : MonoBehaviour
         };
 
         string json = JsonUtility.ToJson(newChild);
+        
+        _childService.AddNewChild(newChild, success =>
+        {
+            if (success)
+            {
+                Debug.Log($"✅ Child '{name}' saved with JoinCode: {joinCode}");
+                statusText.text = "Child created! Join Code:";
+                joinCodeText.gameObject.SetActive(true);
+                joinCodeText.text = $"{joinCode}";
 
+                saveButton.gameObject.SetActive(false);
+            }
+            else
+            {
+                Debug.LogError("❌ Failed to save child.");
+                statusText.text = "❌ Failed to create user.";
+            }
+        });
+
+
+        /*
         FirebaseInit.DbRef.Child(AppConstants.Children).Child(newChildUID)
             .SetRawJsonValueAsync(json)
             .ContinueWithOnMainThread(task =>
@@ -119,7 +144,7 @@ public class AddChildFromAdminUI : MonoBehaviour
                     Debug.LogError("❌ Failed to save child: " + task.Exception);
                     statusText.text = "❌ Failed to create user.";
                 }
-            });
+            });*/
     }
 
     private string GenerateJoinCode(int length = 6)
