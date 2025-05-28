@@ -25,5 +25,10 @@ namespace _App.AdminDashboard
 
         void SaveWeekStartsOnData(DayOfWeek newStartDay);
         void AdminDeclineContract(string contractId);
+        
+        void BuildFamilyModelAsync(Action<FamilyModel> callback);
+        void RefreshChildren();
+
+        void SetPendingNewChild(string childUid);
     }
 }

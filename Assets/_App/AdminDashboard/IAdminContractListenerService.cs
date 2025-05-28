@@ -8,5 +8,4 @@ namespace _App.Services
         void ListenToAdminContracts(string adminUID, Action<List<SmartContractModel>> onChanged);
         void StopListening();
     }
-
 }

@@ -93,7 +93,7 @@ public class AdminProfileSetupUI : MonoBehaviour
 
     private string GenerateJoinCode(int length = 6)
     {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const string chars = "0123456789"; //ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
         var rng = new System.Random();
         return new string(Enumerable.Repeat(chars, length)
             .Select(s => s[rng.Next(s.Length)]).ToArray());

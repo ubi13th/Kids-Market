@@ -68,7 +68,7 @@ namespace _App.Services
                         }
 
                         // ───────────────────── AsNeeded ─────────────────────
-                        if (contract.RepeatMode == RepeatType.AsNeeded)
+                        if (contract.RepeatMode == RepeatType.AsNeeded && !contract.IsCopy)
                         {
                             contract.LoadStateHistory();
                             if (!contract.HasStateOnDate(today))

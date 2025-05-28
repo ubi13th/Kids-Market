@@ -192,7 +192,6 @@ public class SmartContractModel
             }
         }
     }
-
     
     public void SetStateOnDate(DateTime date, SmartContractState state)
     {

@@ -1,11 +1,12 @@
 using System;
 using System.Linq;
+using _App.AdminDashboard;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using Firebase.Extensions;
 using _App.Bootstrap;
 using _App.ChildDashboard;
+using _App.Dashboard;
 
 public class AddChildFromAdminUI : MonoBehaviour
 {
@@ -24,20 +25,35 @@ public class AddChildFromAdminUI : MonoBehaviour
 
     [SerializeField] private TextMeshProUGUI statusText;
     [SerializeField] private TextMeshProUGUI joinCodeText;
+    
+    [SerializeField] private Color greenColor, lightGreyColor, greyColor;
+    
+    private string _lastSavedChildUid = null;
 
     private string _avatarPath = AppConstants.DefaultAvatar;
     private RewardType _selectedRewardType = RewardType.None;
     
     private IChildService _childService;
+    
+    private IDashboardPresenter  _presenter;
+    private IAdminDashboardPresenter  _adminPresenter;
+        
+    public void Initialize(IDashboardPresenter presenter)
+    {
+        _presenter = presenter;
 
+        if (presenter is IAdminDashboardPresenter admin)
+            _adminPresenter = admin;
+    }
+    
     private void Awake()
     {
         _childService = new FirebaseChildService();
         
         avatarPickButton.onClick.AddListener(OpenAvatarPicker);
         
-        saveButton.gameObject.SetActive(true);
-        saveButton.onClick.AddListener(SaveNewChild);
+        saveButton?.gameObject.SetActive(true);
+        saveButton?.onClick.AddListener(SaveNewChild);
         
         backButton.onClick.AddListener(CloseUserCreatorPanel);
 
@@ -50,11 +66,14 @@ public class AddChildFromAdminUI : MonoBehaviour
 
     private void CloseUserCreatorPanel()
     {
+        _lastSavedChildUid = null;
         gameObject.SetActive(false);
     }
 
     private void OpenAvatarPicker()
     {
+        saveButton?.gameObject.SetActive(true);
+        
         avatarPickerUI.OnAvatarSelected = (avatarPath) =>
         {
             _avatarPath = avatarPath;
@@ -66,17 +85,114 @@ public class AddChildFromAdminUI : MonoBehaviour
     private void SetRewardType(RewardType type)
     {
         _selectedRewardType = type;
+        
+        saveButton?.gameObject.SetActive(true);
 
-        // UI highlight logic (example: change color or interactable state)
-        moneyButton.interactable = type != RewardType.Money;
-        pointsButton.interactable = type != RewardType.Points;
-        noneButton.interactable = type != RewardType.None;
+        UpdateButtonStyle(moneyButton, type == RewardType.Money);
+        UpdateButtonStyle(pointsButton, type == RewardType.Points);
+        UpdateButtonStyle(noneButton, type == RewardType.None);
     }
 
+    private void UpdateButtonStyle(Button button, bool isSelected)
+    {
+        var background = button.GetComponent<Image>();
+        var label = button.GetComponentInChildren<TextMeshProUGUI>();
+
+        if (isSelected)
+        {
+            background.color = lightGreyColor;
+            label.color = greenColor;
+        }
+        else
+        {
+            background.color = greyColor;
+            label.color = lightGreyColor;
+        }
+
+        button.interactable = !isSelected;
+    }
+    
     private void SaveNewChild()
     {
-        string name = nameInput.text.Trim();
-        if (string.IsNullOrEmpty(name))
+        string childName = nameInput.text.Trim();
+        if (string.IsNullOrEmpty(childName))
+        {
+            statusText.text = "❌ Name is required.";
+            return;
+        }
+    
+        string adminUID = FirebaseInit.Auth.CurrentUser?.UserId;
+        if (string.IsNullOrEmpty(adminUID))
+        {
+            statusText.text = "❌ Admin not signed in.";
+            return;
+        }
+    
+        // ✅ If we're editing an existing child (based on internal UID tracking)
+        if (!string.IsNullOrEmpty(_lastSavedChildUid))
+        {
+            var existingChild = _adminPresenter?.GetAllChildren()
+                .FirstOrDefault(c => c.Uid == _lastSavedChildUid);
+    
+            if (existingChild != null)
+            {
+                existingChild.DisplayName = childName;
+                existingChild.AvatarPath = _avatarPath;
+                existingChild.RewardPreference = _selectedRewardType;
+    
+                _childService.SaveChildProfile(existingChild, success =>
+                {
+                    if (success)
+                    {
+                        Saving(existingChild.DisplayName, existingChild.JoinCode);
+                    }
+                    else
+                    {
+                        Debug.LogError("❌ Failed to update child.");
+                        statusText.text = "❌ Failed to update user.";
+                    }
+                });
+    
+                return;
+            }
+        }
+    
+        // ✅ Create a new child
+        string newChildUID = Guid.NewGuid().ToString();
+        string joinCode = GenerateJoinCode();
+    
+        ChildModel newChild = new ChildModel
+        {
+            Uid = newChildUID,
+            DisplayName = childName,
+            AvatarPath = _avatarPath,
+            AdminUID = adminUID,
+            RewardPreference = _selectedRewardType,
+            JoinCode = joinCode,
+            Balance = 0
+        };
+    
+        _adminPresenter?.SetPendingNewChild(newChildUID);
+        _childService.AddNewChild(newChild, success =>
+        {
+            if (success)
+            {
+                _lastSavedChildUid = newChildUID; // ✅ Track last created UID
+                Saving(childName, joinCode);
+            }
+            else
+            {
+                Debug.LogError("❌ Failed to save child.");
+                statusText.text = "❌ Failed to create user.";
+            }
+        });
+    }
+
+
+    /*private void SaveNewChild()
+    {
+        string childName = nameInput.text.Trim();
+        if (string.IsNullOrEmpty(childName))
         {
             statusText.text = "❌ Name is required.";
             return;
@@ -96,26 +212,21 @@ public class AddChildFromAdminUI : MonoBehaviour
         ChildModel newChild = new ChildModel
         {
             Uid = newChildUID,
-            DisplayName = name,
+            DisplayName = childName,
             AvatarPath = _avatarPath,
             AdminUID = adminUID,
             RewardPreference = _selectedRewardType,
             JoinCode = joinCode,
             Balance = 0
         };
-
-        string json = JsonUtility.ToJson(newChild);
+        
+        _adminPresenter?.SetPendingNewChild(newChildUID); // ✅ Tell presenter which child to select
         
         _childService.AddNewChild(newChild, success =>
         {
             if (success)
             {
-                Debug.Log($"✅ Child '{name}' saved with JoinCode: {joinCode}");
-                statusText.text = "Child created! Join Code:";
-                joinCodeText.gameObject.SetActive(true);
-                joinCodeText.text = $"{joinCode}";
-
-                saveButton.gameObject.SetActive(false);
+                Saving(childName, joinCode);
             }
             else
             {
@@ -123,33 +234,20 @@ public class AddChildFromAdminUI : MonoBehaviour
                 statusText.text = "❌ Failed to create user.";
             }
         });
+    }*/
 
-
-        /*
-        FirebaseInit.DbRef.Child(AppConstants.Children).Child(newChildUID)
-            .SetRawJsonValueAsync(json)
-            .ContinueWithOnMainThread(task =>
-            {
-                if (task.IsCompletedSuccessfully)
-                {
-                    Debug.Log($"✅ Child '{name}' saved with JoinCode: {joinCode}");
-                    statusText.text = "Child created! Join Code:";
-                    joinCodeText.gameObject.SetActive(true);
-                    joinCodeText.text = $"{joinCode}";
-                    
-                    saveButton.gameObject.SetActive(false);
-                }
-                else
-                {
-                    Debug.LogError("❌ Failed to save child: " + task.Exception);
-                    statusText.text = "❌ Failed to create user.";
-                }
-            });*/
+    private void Saving(string childName, string joinCode)
+    {
+        joinCodeText.text = $"{joinCode}";
+        statusText.text = "Child created! Join Code:";
+        joinCodeText.gameObject.SetActive(true);
+        joinCodeText.text = $"{joinCode}";
+        saveButton?.gameObject.SetActive(false);
     }
 
     private string GenerateJoinCode(int length = 6)
     {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const string chars = "0123456789"; // ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
         System.Random rng = new();
         return new string(new char[length]
             .Select(_ => chars[rng.Next(chars.Length)]).ToArray());

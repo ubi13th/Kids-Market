@@ -410,6 +410,16 @@ namespace _App.ChildDashboard
             Debug.Log("🎁 Child surprise button pressed");
         }
 
+        public void CleanupContractListenerService()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void CleanupChildListenerService()
+        {
+            throw new NotImplementedException();
+        }
+
         public void Cleanup() => _contractListenerService.StopListening();
     }
 }

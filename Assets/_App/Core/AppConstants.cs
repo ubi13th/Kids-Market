@@ -42,4 +42,5 @@ public static class AppConstants
     public const string DueDate = "DueDate";
     public const string DueTime = "DueTime";
     public const string Icon = "Icon";
+    public const string IsCopy = "isCopy";
 }

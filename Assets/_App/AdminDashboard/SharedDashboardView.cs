@@ -8,6 +8,7 @@ using _App.Dashboard;
 using _App.Services;
 using _App.Services.BalanceService;
 using _App.Settings;
+using _App.UI.Scripts;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,7 +17,9 @@ namespace _App.AdminDashboard
 {
     public class SharedDashboardView : MonoBehaviour, IDashboardView
     {
-        [SerializeField] private AppSettings appSettings;
+        [SerializeField] private AppSettingsView appSettingsView;
+        [SerializeField] private EditSelectedUserView editSelectedUserView;
+        [SerializeField] private AddChildFromAdminUI addChildFromAdminUI;
         [Header("Profile & Child")]
         [SerializeField] private Button profileAvatarButton;
         [SerializeField] private Image profileAvatarImage;
@@ -132,14 +135,16 @@ namespace _App.AdminDashboard
                 try
                 {
                     _presenter.Initialize(uid);
-                    appSettings.Initialize(_presenter);
+                    appSettingsView.Initialize(_presenter);
+                    editSelectedUserView.Initialize(_presenter);
+                    addChildFromAdminUI.Initialize(_presenter);
                 }
                 catch (Exception ex)
                 {
                     Debug.LogError("❌ Crash during DelayedInitialize: " + ex);
                 }
 
-                appSettings.Initialize(_presenter);
+                appSettingsView.Initialize(_presenter);
             }
             catch (Exception ex)
             {
@@ -460,91 +465,6 @@ namespace _App.AdminDashboard
                 stateHistoryRaw = $"{queueKey}:{(int)original.StateHistory[queueKey].First().State}"
             };
         }
-
-        
-        /*public void ShowGroupedContracts(Dictionary<RepeatType, List<SmartContractModel>> groupedContracts)
-        {
-            if (groupedContracts == null)
-            {
-                Debug.LogError("❌ groupedContracts is null");
-                return;
-            }
-            
-            var selectedDay = _presenter.SelectedDay;
-            string keyPrefix = selectedDay.ToString("yyyy-MM-dd");
-
-            var mergedEveryDay = new List<SmartContractModel>();
-            var addedIds = new HashSet<string>();
-            
-            ClearContractUI();
-            
-            void AddToEveryDay(SmartContractModel contract)
-            {
-                if (addedIds.Add(contract.Id))
-                    mergedEveryDay.Add(contract);
-            }
-
-            // 🔁 Step 1: Contracts with native daily grouping
-            foreach (var group in groupedContracts.Values)
-            {
-                foreach (var contract in group)
-                {
-                    if (contract.ShouldAppearInEveryDayGroup(selectedDay))
-                        AddToEveryDay(contract);
-                }
-            }
-
-            // 🔁 Step 2: Explicit AsNeeded queue-based check (optional)
-            if (groupedContracts.TryGetValue(RepeatType.AsNeeded, out var asNeededGroup))
-            {
-                foreach (var contract in asNeededGroup)
-                {
-                    if (!contract.IsCopy) continue;
-                    contract.LoadStateHistory();
-
-                    if (IsAsNeededCopyActiveToday(contract, keyPrefix))
-                        AddToEveryDay(contract);
-                }
-            }
-
-            ShowGroup("", mergedEveryDay, showHeader: false);
-
-            // 🧭 Step 3: Non-completed Once contracts
-            if (groupedContracts.TryGetValue(RepeatType.Once, out var onceGroup))
-            {
-                var onceVisible = onceGroup
-                    .Where(c => !c.IsCopy &&
-                                c.IsVisibleOn(selectedDay) &&
-                                (!c.StateHistory.TryGetValue(keyPrefix, out var stateList) ||
-                                 !stateList.Any(r => r.State == SmartContractState.Completed)))
-                    .ToList();
-
-                if (onceVisible.Count > 0)
-                    ShowGroup("Once", onceVisible, showHeader: true);
-            }
-
-            // 🧭 Step 4: Show AsNeeded originals
-            var mainAsNeeded = asNeededGroup?
-                .Where(c => !c.IsCopy && c.IsVisibleOn(selectedDay))
-                .ToList();
-
-            if (mainAsNeeded is { Count: > 0 })
-                ShowGroup("As Needed", mainAsNeeded, showHeader: true);
-
-            if (!_didAutoSelectToday)
-            {
-                _didAutoSelectToday = true;
-                SelectToday();
-            }
-        }*/
-
-        private bool IsAsNeededCopyActiveToday(SmartContractModel contract, string keyPrefix)
-        {
-            return contract.StateHistory.Any(kv =>
-                kv.Key.StartsWith(keyPrefix + "#") &&
-                kv.Value.Any(r => r.State is SmartContractState.Completed or SmartContractState.ReadyToConfirm));
-        }
-
         
         private void CreateGroupHeader(string label)
         {

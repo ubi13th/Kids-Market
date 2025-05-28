@@ -23,7 +23,8 @@ namespace _App.Dashboard
         
         void PayoutExtraReward();
 
-        void Cleanup();
+        void CleanupContractListenerService();
+        void CleanupChildListenerService();
         int GetLastQueueIndexForDay(SmartContractModel contract, DateTime selectedDay);
     }
 }
