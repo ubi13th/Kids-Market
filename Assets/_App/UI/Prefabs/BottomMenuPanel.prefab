@@ -362,6 +362,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c59bf258cd9846948f02afb409b767af, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  sharedDashboardView: {fileID: 0}
   homeButton: {fileID: 6836057244318371199}
   homeActivatedIcon: {fileID: 6836057243668173332}
   reportsButton: {fileID: 6836057244151567102}

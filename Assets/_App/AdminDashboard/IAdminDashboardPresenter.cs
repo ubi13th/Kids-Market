@@ -30,5 +30,6 @@ namespace _App.AdminDashboard
         void RefreshChildren();
 
         void SetPendingNewChild(string childUid);
+        void UpdateChildBalance(float delta, string reason, bool recordHistory = false);
     }
 }

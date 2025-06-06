@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using _App.Models;
 
 [Serializable]
 public class ChildModel : UserModel
@@ -6,12 +8,5 @@ public class ChildModel : UserModel
     public string AdminUID;
     public float Balance;
     public RewardType RewardPreference = RewardType.Money;
-}
-
-public enum RewardType
-{
-    Money,
-    Points,
-    Event,
-    None
+    public List<SavingJarModel> SavingJars = new();
 }

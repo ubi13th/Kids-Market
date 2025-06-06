@@ -7,7 +7,8 @@ namespace _App.UI.Scripts
 {
     public class BottomMenuHandlerView : MonoBehaviour
     {
-        [Header("Buttons Set Up")]
+        [Header("Buttons Set Up")] 
+        [SerializeField] private SharedDashboardView sharedDashboardView;
         [SerializeField] private Button homeButton;
         [SerializeField] private GameObject homeActivatedIcon;
         [SerializeField] private Button reportsButton;
@@ -42,6 +43,8 @@ namespace _App.UI.Scripts
             settingsActivatedIcon.SetActive(false);
             settingsPanel.SetActive(false);
             reportsPanel.SetActive(true);
+            
+            sharedDashboardView.OnOpenHistoryTab();
         }
         
         private void OpenSettingsPanel()

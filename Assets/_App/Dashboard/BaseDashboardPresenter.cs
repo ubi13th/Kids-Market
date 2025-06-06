@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using _App.ChildDashboard;
+using _App.Models;
 using _App.Services;
 using _App.Services.BalanceService;
 using UnityEngine;
@@ -177,7 +178,8 @@ namespace _App.Dashboard
                     _balanceService.AdjustBalance(
                         _currentChild.Uid,
                         -contract.RewardAmount,
-                        $"Contract '{contract.Title}' purchased"
+                        $"Contract '{contract.Title}' purchased",
+                        recordHistory: false
                     );
 
                     Debug.Log($"✅ Contract purchased: {contract.Title} | Amount: -{contract.RewardAmount}");
@@ -233,15 +235,14 @@ namespace _App.Dashboard
             return int.TryParse(queuePart, out int result) ? result : -1;
         }
         
-        protected void UpdateChildBalance(float delta, string reason = "Manual adjustment")
+        protected void UpdateChildBalance(float delta, string reason = "No Notes", bool recordHistory = false)
         {
             if (_currentChild == null) return;
 
-            _balanceService.AdjustBalance(_currentChild.Uid, delta, reason, success =>
+            _balanceService.AdjustBalance(_currentChild.Uid, delta, reason, recordHistory, success =>
             {
                 if (success)
                 {
-                    // You can optionally update local balance immediately for smoother UX
                     _currentChild.Balance += delta;
                     _view.ShowChildBalance(_currentChild.Balance);
                 }

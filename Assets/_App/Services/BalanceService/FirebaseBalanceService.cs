@@ -25,7 +25,7 @@ namespace _App.Services.BalanceService
             }
         }
 
-        public void AdjustBalance(string childUid, float delta, string reason, Action<bool> onComplete = null)
+        public void AdjustBalance(string childUid, float delta, string reason, bool recordHistory = true, Action<bool> onComplete = null)
         {
             var balanceRef = ChildrenRef?.Child(childUid)?.Child(AppConstants.Balance);
             if (balanceRef == null)
@@ -51,7 +51,10 @@ namespace _App.Services.BalanceService
                     if (setTask.IsCompletedSuccessfully)
                     {
                         Debug.Log($"💰 Balance updated: {current} → {updated} | Reason: {reason}");
-                        AddBalanceHistory(childUid, delta, reason);
+
+                        if (recordHistory)
+                            AddBalanceHistory(childUid, delta, reason);
+
                         onComplete?.Invoke(true);
                     }
                     else
@@ -108,22 +111,42 @@ namespace _App.Services.BalanceService
                 }
             };
         }
-
+        
         public void AddBalanceHistory(string childUid, float delta, string reason)
         {
-            var historyRef = ChildrenRef?.Child(childUid)?.Child("BalanceHistory");
-            if (historyRef == null)
-                return;
+            var historyRef = ChildrenRef.Child(childUid).Child(AppConstants.BalanceHistory);
 
-            var entry = new Dictionary<string, object>
+            // Step 1: Add new entry
+            var entry = new BalanceHistoryEntry
             {
-                { "Delta", delta },
-                { "Reason", reason },
-                { "Timestamp", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mmZ")
-                }
+                Amount = delta,
+                Reason = reason,
+                Timestamp = DateTime.UtcNow.ToString("s")
             };
 
-            historyRef.Push().SetValueAsync(entry);
+            var newEntryRef = historyRef.Push();
+            newEntryRef.SetRawJsonValueAsync(JsonUtility.ToJson(entry));
+
+            // Step 2: Clean up if there are more than 100 entries
+            historyRef.GetValueAsync().ContinueWithOnMainThread(task =>
+            {
+                if (!task.IsCompletedSuccessfully || !task.Result.Exists) return;
+
+                var allEntries = new List<DataSnapshot>();
+
+                foreach (var child in task.Result.Children)
+                    allEntries.Add(child);
+
+                // Sort by key creation time (Firebase Push keys are time-ordered)
+                allEntries.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
+
+                int excess = allEntries.Count - 100;
+                if (excess <= 0) return;
+
+                // Delete oldest entries
+                for (int i = 0; i < excess; i++)
+                    historyRef.Child(allEntries[i].Key).RemoveValueAsync();
+            });
         }
     }
 }

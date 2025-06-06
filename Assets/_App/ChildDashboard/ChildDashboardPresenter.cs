@@ -12,6 +12,7 @@ namespace _App.ChildDashboard
     {
         private readonly IChildContractListenerService _contractListenerService;
         private readonly IBalanceListenerService _balanceListenerService;
+        private readonly IncomeDistributorService _distributorService = new();
 
         private readonly float _asNeededReSetDelay = 30f;
 
@@ -174,7 +175,9 @@ namespace _App.ChildDashboard
                             if (shouldGiveReward)
                             {
                                 Debug.Log($"✅ Child confirmed AsNeeded contract: {parent.Title} | Queue #{queueIndex} | +{parent.RewardAmount}");
-                                UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                                _distributorService.DistributeIncome(_currentChild.Uid, parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                                
+                                //UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
                             }
                             else
                             {
@@ -194,7 +197,9 @@ namespace _App.ChildDashboard
                         if (shouldGiveReward)
                         {
                             Debug.Log($"✅ Child confirmed flat contract: {parent.Title} | +{parent.RewardAmount}");
-                            UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                            _distributorService.DistributeIncome(_currentChild.Uid, parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+
+                            //UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
                         }
                         else
                         {
@@ -276,11 +281,11 @@ namespace _App.ChildDashboard
                             if (wasCompleted)
                             {
                                 Debug.Log($"↩️ Child undid confirmation (completed) for '{contract.Title}' | -{contract.RewardAmount}");
-
-                                _balanceService.AdjustBalance(
+                                
+                                _distributorService.UndoDistribution(
                                     _currentChild.Uid,
-                                    -contract.RewardAmount,
-                                    $"Undo confirmation for contract '{contract.Title}' (queue {queueKey})"
+                                    contract.RewardAmount,
+                                    $"Undo confirmation for contract '{contract.Title}'"
                                 );
                             }
                             else if (wasWaitingApproval)
@@ -314,14 +319,14 @@ namespace _App.ChildDashboard
                         {
                             if (previousState == SmartContractState.Completed)
                             {
-                                _balanceService.AdjustBalance(
+                                _distributorService.UndoDistribution(
                                     _currentChild.Uid,
-                                    -contract.RewardAmount,
+                                    contract.RewardAmount,
                                     $"Undo confirmation for contract '{contract.Title}'"
                                 );
                             }
 
-                            Debug.Log($"↩️ Undo confirmed: {contract.Title} | {previousState} → ReadyToSell");
+                            Debug.Log($"↩️ Undo confirmed: {contract.Title} | State: {previousState} → ReadyToSell | Day: {_selectedDay:yyyy-MM-dd}");
                         }
                     });
                 }
@@ -395,8 +400,8 @@ namespace _App.ChildDashboard
                     {
                         Debug.Log($"↩️ Purchase undone: {contract.Title} reverted to ReadyToBuy (+{contract.RewardAmount})");
 
-                        _balanceService.AdjustBalance(
-                            contract.AssignedToUid,
+                        _distributorService.UndoDistribution(
+                            _currentChild.Uid,
                             contract.RewardAmount,
                             $"Undo purchase of contract '{contract.Title}'"
                         );

@@ -43,4 +43,8 @@ public static class AppConstants
     public const string DueTime = "DueTime";
     public const string Icon = "Icon";
     public const string IsCopy = "isCopy";
+
+    public const string SavingJars = "SavingJars";
+    public const string SavedAmount = "SavedAmount";
+    public const string BalanceHistory = "BalanceHistory";
 }

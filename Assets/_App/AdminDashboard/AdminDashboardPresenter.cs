@@ -13,6 +13,7 @@ namespace _App.AdminDashboard
     {
         private readonly IAdminContractListenerService _contractListenerService;
         private readonly IBalanceListenerService _balanceListenerService;
+        private readonly IncomeDistributorService _distributorService = new();
         
         private string _pendingNewChildUid = null;
         
@@ -52,6 +53,12 @@ namespace _App.AdminDashboard
         
         public void SetPendingNewChild(string childUid) => 
             _pendingNewChildUid = childUid;
+
+        public new void UpdateChildBalance(float delta, string reason, bool recordHistory = false)
+        {
+            base.UpdateChildBalance(delta, reason, recordHistory);
+        }
+
 
         private void RefreshCalendarUI()
         {
@@ -101,7 +108,7 @@ namespace _App.AdminDashboard
             {
                 SetCurrentChild(children.First());
                 _view.SelectToday();
-                Debug.Log($"SetCurrentChild _currentChild 1 = {_currentChild}");
+                Debug.Log($"SetCurrentChild _currentChild 1 = {_currentChild?.Uid}");
             }
             else
             {
@@ -120,43 +127,6 @@ namespace _App.AdminDashboard
                 }
             }
         }
-        
-        /*private void OnChildrenUpdated(List<ChildModel> children)
-        {
-            if (children == null || children.Count == 0)
-            {
-                _view.ShowExtraRewardStatus("No children linked.");
-                _currentChild = null; // reset current child
-                return;
-            }
-
-            _children = children;
-            _view.ShowChildren(children);
-
-            if (_currentChild == null)
-            {
-                SetCurrentChild(children.First());
-                _view.SelectToday();
-                Debug.Log($"SetCurrentChild _currentChild 1 = {_currentChild}");
-            }
-            else
-            {
-                var existing = children.FirstOrDefault(c => c.Uid == _currentChild.Uid);
-                if (existing != null)
-                {
-                    SetCurrentChild(existing);
-                    _view.SelectToday();
-                    Debug.Log($"SetCurrentChild _currentChild 3 = {_currentChild}");
-                }
-                else
-                {
-                    // 🔁 Fallback if current child no longer exists (deleted)
-                    SetCurrentChild(children.First());
-                    _view.SelectToday();
-                    Debug.Log($"🆕 Current child not found. Switched to: {_currentChild.DisplayName}");
-                }
-            }
-        }*/
 
         private void OnContractsChanged(List<SmartContractModel> allContracts)
         {
@@ -274,7 +244,9 @@ namespace _App.AdminDashboard
                         {
                             Debug.Log($"✅ Admin approved ReadyToConfirm copy: {contract.Title} | Queue {matchingKey} | +{contract.RewardAmount}");
                             //UpdateChildBalance(contract.RewardAmount);
-                            UpdateChildBalance(contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
+                            _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
+
+                            //UpdateChildBalance(contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
                         }
                     });
 
@@ -337,7 +309,9 @@ namespace _App.AdminDashboard
 
                             Debug.Log($"✅ Admin confirmed new AsNeeded copy: {parent.Title} | Queue #{queueIndex} | +{parent.RewardAmount}");
                             //UpdateChildBalance(parent.RewardAmount);
-                            UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                            _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
+
+                            //UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
                         });
                     });
 
@@ -353,7 +327,9 @@ namespace _App.AdminDashboard
                         {
                             Debug.Log($"✅ Admin confirmed flat contract: {contract.Title} | +{contract.RewardAmount}");
                             //UpdateChildBalance(contract.RewardAmount);
-                            UpdateChildBalance(contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
+                            _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
+
+                            //UpdateChildBalance(contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
                         }
                     });
                 }
@@ -430,10 +406,10 @@ namespace _App.AdminDashboard
                             {
                                 Debug.Log($"↩️ Undo confirmed for AsNeeded contract: {contract.Title} | Queue {queueKey} (-{contract.RewardAmount})");
 
-                                _balanceService.AdjustBalance(
+                                _distributorService.UndoDistribution(
                                     _currentChild.Uid,
-                                    -contract.RewardAmount,
-                                    $"Undo confirmation for contract '{contract.Title}' (queue {queueKey})"
+                                    contract.RewardAmount,
+                                    $"Undo confirmation for contract '{contract.Title}'"
                                 );
                             }
                         }
@@ -459,9 +435,9 @@ namespace _App.AdminDashboard
                         {
                             if (previousState == SmartContractState.Completed)
                             {
-                                _balanceService.AdjustBalance(
+                                _distributorService.UndoDistribution(
                                     _currentChild.Uid,
-                                    -contract.RewardAmount,
+                                    contract.RewardAmount,
                                     $"Undo confirmation for contract '{contract.Title}'"
                                 );
                             }
@@ -629,9 +605,9 @@ namespace _App.AdminDashboard
                     if (success)
                     {
                         Debug.Log($"↩️ Purchase undone: {contract.Title} reverted to ReadyToBuy (+{contract.RewardAmount})");
-
-                        _balanceService.AdjustBalance(
-                            contract.AssignedToUid,
+                        
+                        _distributorService.UndoDistribution(
+                            _currentChild.Uid,
                             contract.RewardAmount,
                             $"Undo purchase of contract '{contract.Title}'"
                         );

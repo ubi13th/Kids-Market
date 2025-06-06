@@ -2,9 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using _App.Balance;
 using _App.Bootstrap;
 using _App.ChildDashboard;
 using _App.Dashboard;
+using _App.Models;
 using _App.Services;
 using _App.Services.BalanceService;
 using _App.Settings;
@@ -20,6 +22,8 @@ namespace _App.AdminDashboard
         [SerializeField] private AppSettingsView appSettingsView;
         [SerializeField] private EditSelectedUserView editSelectedUserView;
         [SerializeField] private AddChildFromAdminUI addChildFromAdminUI;
+        [SerializeField] private BalanceDashboardView balanceDashboardView;
+        [SerializeField] private HistoryPresenter historyPresenter;
         [Header("Profile & Child")]
         [SerializeField] private Button profileAvatarButton;
         [SerializeField] private Image profileAvatarImage;
@@ -138,6 +142,7 @@ namespace _App.AdminDashboard
                     appSettingsView.Initialize(_presenter);
                     editSelectedUserView.Initialize(_presenter);
                     addChildFromAdminUI.Initialize(_presenter);
+                    balanceDashboardView.Initialize(_presenter);
                 }
                 catch (Exception ex)
                 {
@@ -178,6 +183,13 @@ namespace _App.AdminDashboard
             }
             
             SetupCalendarButtons();
+        }
+        
+        public void OnOpenHistoryTab()
+        {
+            ChildModel child = _presenter?.CurrentChild;
+            var childUid = _presenter?.CurrentChild?.Uid; // From your presenter or model
+            historyPresenter.Initialize(child, childUid);
         }
         
         public void SetupCalendarButtons()
@@ -347,6 +359,8 @@ namespace _App.AdminDashboard
         {
             profileNameText.text = child.DisplayName;
             profileAvatarImage.sprite = AvatarLoader.LoadAvatar(child.AvatarPath);
+            
+            balanceDashboardView.OnChildSet(child);
         }
 
         public void ShowChildBalance(float balance) =>
@@ -570,6 +584,11 @@ namespace _App.AdminDashboard
                 dateText.text = selectedDay.ToString("dd MMM");
         }
         
+        public void OpenAdjustBalancePanel()
+        {
+            adjustBalancePanel.SetActive(true);
+        }
+        
         public void OpenEditContractPanel()
         {
             if (_presenter is IAdminDashboardPresenter adminPresenter)
@@ -630,10 +649,7 @@ namespace _App.AdminDashboard
         
         public void OpenRewardPanel() => 
             rewardPanel.SetActive(true);
-        
-        public void OpenAdjustBalancePanel() => 
-            adjustBalancePanel.SetActive(true);
-        
+
         public void ShowExtraRewardEligible(bool eligible) => 
             rewardButton.interactable = eligible;
         
