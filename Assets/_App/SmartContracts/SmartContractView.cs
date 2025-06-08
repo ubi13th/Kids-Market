@@ -1,10 +1,8 @@
 using System;
-using System.Linq;
 using _App.AdminDashboard;
 using _App.Dashboard;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHandler, IEndDragHandler
@@ -57,8 +55,41 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
         _presenter = presenter;
         _adminPresenter = presenter as IAdminDashboardPresenter;
     }
+    
+    public void Initialize(SmartContractModel contract, DateTime selectedDay)
+    {
+        _isAdmin = UserSession.IsAdmin;
+        _isSettingOn = false;
+        ContractData = contract;
+        ContractId = contract.Id;
 
-    public void Initialize(SmartContractModel contract)
+        titleText?.SetText(contract.Title);
+        rewardText?.SetText($"{contract.RewardAmount:F2}");
+        reward2Text?.SetText($"{contract.RewardAmount:F2}");
+
+        if (iconImage != null)
+            iconImage.sprite = ContractIconLoader.Load(contract.IconPath);
+
+        if (!string.IsNullOrEmpty(contract.DueTime) && contract.DueTime != "00:00")
+        {
+            dueTimeText?.SetText(contract.DueTime);
+            dueTimeText?.gameObject.SetActive(true);
+        }
+        else
+        {
+            dueTimeText?.gameObject.SetActive(false);
+        }
+
+        var today = DateTime.Today;
+        selectedDay = selectedDay.Date;
+        var isFuture = selectedDay > today;
+
+        SetupButtons(contract, isFuture, selectedDay, today);
+        CloseSetUpButtons();
+    }
+
+
+    /*public void Initialize(SmartContractModel contract)
     {
         _isAdmin = UserSession.IsAdmin;
         
@@ -101,7 +132,7 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
         SetupButtons(contract, isFuture, selectedDay, today);
         CloseSetUpButtons();
         //ResetSwipePosition();
-    }
+    }*/
     
     private void SetupButtons(SmartContractModel contract, bool isFuture, DateTime selectedDay, DateTime today)
     {
@@ -155,7 +186,7 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
                     break;
                 case SmartContractState.Purchased:
                     sellButton.GetComponent<Image>().color = greyColor;
-                    sellButton.onClick.AddListener(() => _presenter.UndoPurchaseContract(contract.Id));
+                    sellButton.onClick.AddListener(() => _presenter.UndoPurchaseContract(contract.Id, selectedDay));
                     break;
                 case SmartContractState.ReadyToSell:
                     sellButtonText.gameObject.SetActive(true);
@@ -182,7 +213,7 @@ public class SmartContractView : MonoBehaviour //, IPointerDownHandler, IDragHan
                     break;
                 case SmartContractState.ReadyToBuy:
                     sellButton.GetComponent<Image>().color = redColor;
-                    sellButton.onClick.AddListener(() => _presenter.ChildBuyAdminSellContract(contract.Id));
+                    sellButton.onClick.AddListener(() => _presenter.ChildBuyAdminSellContract(contract.Id, selectedDay));
                     sellButtonText.gameObject.SetActive(true);
                     sellButtonText.text = _isAdmin ? "Sell" : "Buy";
                     if(!_isAdmin)

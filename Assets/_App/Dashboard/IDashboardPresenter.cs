@@ -16,9 +16,11 @@ namespace _App.Dashboard
 
         void ConfirmContractByRole(string contractId);
         void UndoConfirmContractByRole(string contractId);
+        
+        List<SmartContractModel> GetAllContracts();
 
-        void ChildBuyAdminSellContract(string contractId);
-        void UndoPurchaseContract(string contractId);
+        void ChildBuyAdminSellContract(string contractId, DateTime selectedDay);
+        void UndoPurchaseContract(string contractId, DateTime selectedDay);
 
         void OnChildSurpriseButtonPressed();
         

@@ -7,7 +7,7 @@ namespace _App.Balance
     {
         [SerializeField] private UnifiedHistoryView _historyView;
 
-        private FirebaseHistoryService _historyService = new();
+        private readonly FirebaseHistoryService _historyService = new();
         private string _childUid;
         private ChildModel _currentChild;
 

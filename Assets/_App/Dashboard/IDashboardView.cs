@@ -28,5 +28,7 @@ namespace _App.Dashboard
         void SetupCalendarButtons();
         void OnAdminSurpriseButtonClick();
         void OnChildSurpriseButtonClick();
+        
+        void UpdateReports(ChildModel child, List<SmartContractModel> allContracts);
     }
 }

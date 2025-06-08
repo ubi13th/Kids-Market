@@ -389,6 +389,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1327277937742285015}
   - component: {fileID: 4939729302800308279}
+  - component: {fileID: -6461012725857136466}
+  - component: {fileID: 982957182122792303}
   m_Layer: 5
   m_Name: SmartContractEntryPrefab
   m_TagString: Untagged
@@ -457,6 +459,39 @@ MonoBehaviour:
   greyColor: {r: 0.4039216, g: 0.38431376, b: 0.45882356, a: 1}
   lightGreyColor: {r: 0.56034815, g: 0.54018337, b: 0.5754717, a: 1}
   cyanColor: {r: 0, g: 1, b: 1, a: 1}
+--- !u!114 &-6461012725857136466
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1327277937742285096}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_IgnoreLayout: 0
+  m_MinWidth: -1
+  m_MinHeight: -1
+  m_PreferredWidth: -1
+  m_PreferredHeight: 190
+  m_FlexibleWidth: 1
+  m_FlexibleHeight: -1
+  m_LayoutPriority: 1
+--- !u!114 &982957182122792303
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1327277937742285096}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31a19414c41e5ae4aae2af33fee712f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_ShowMaskGraphic: 0
 --- !u!1 &1327277938015655374
 GameObject:
   m_ObjectHideFlags: 0
@@ -1274,8 +1309,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -100, y: 0}
-  m_SizeDelta: {x: 200, y: 180}
+  m_AnchoredPosition: {x: -100, y: 0.5}
+  m_SizeDelta: {x: 200, y: 182}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7248932160732489503
 CanvasRenderer:
@@ -1708,8 +1743,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -200, y: 0}
-  m_SizeDelta: {x: 400, y: 180}
+  m_AnchoredPosition: {x: -200, y: 0.5}
+  m_SizeDelta: {x: 400, y: 182}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4565253488946703365
 CanvasRenderer:
@@ -2565,7 +2600,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4283778120
+    rgba: 4280554520
   m_fontColor: {r: 0.09301772, g: 0.07809718, b: 0.14150941, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3

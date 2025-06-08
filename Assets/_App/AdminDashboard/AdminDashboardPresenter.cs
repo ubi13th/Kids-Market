@@ -15,6 +15,8 @@ namespace _App.AdminDashboard
         private readonly IBalanceListenerService _balanceListenerService;
         private readonly IncomeDistributorService _distributorService = new();
         
+        public List<SmartContractModel> GetAllContracts() => _allContracts;
+        
         private string _pendingNewChildUid = null;
         
         public AdminDashboardPresenter(
@@ -155,6 +157,7 @@ namespace _App.AdminDashboard
             });
             
             _view.UpdateCalendarColors(_allContracts, _currentChild.Uid);
+            _view.UpdateReports(_currentChild, _allContracts);
             FilterAndShowContracts();
             CheckExtraRewardEligibility();
         }
@@ -552,10 +555,10 @@ namespace _App.AdminDashboard
             });
         }
         
-        public void ChildBuyAdminSellContract(string contractId) => 
-            BuyContract(contractId);
+        public void ChildBuyAdminSellContract(string contractId, DateTime selectedDay) => 
+            BuyContract(contractId, selectedDay);
 
-        public void UndoPurchaseContract(string contractId)
+        public new void UndoPurchaseContract(string contractId, DateTime selectedDay)
         {
             if (_selectedDay == default)
             {
@@ -580,7 +583,7 @@ namespace _App.AdminDashboard
 
                 contract.LoadStateHistory();
 
-                string key = _selectedDay.ToString("yyyy-MM-dd");
+                string key = selectedDay.ToString("yyyy-MM-dd");
 
                 if (!contract.StateHistory.TryGetValue(key, out var records) ||
                     !records.Any(r => r.State == SmartContractState.Purchased))
@@ -606,7 +609,7 @@ namespace _App.AdminDashboard
                     {
                         Debug.Log($"↩️ Purchase undone: {contract.Title} reverted to ReadyToBuy (+{contract.RewardAmount})");
                         
-                        _distributorService.UndoDistribution(
+                        _distributorService.UndoPurchaseContract(
                             _currentChild.Uid,
                             contract.RewardAmount,
                             $"Undo purchase of contract '{contract.Title}'"

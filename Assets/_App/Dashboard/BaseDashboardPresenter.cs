@@ -139,7 +139,103 @@ namespace _App.Dashboard
             _view.ShowGroupedContracts(grouped);
         }
         
-        protected void BuyContract(string contractId)
+        protected void BuyContract(string contractId, DateTime selectedDay)
+        {
+            if (selectedDay == default)
+            {
+                Debug.LogWarning("❌ No selected day provided.");
+                return;
+            }
+
+            _contractService.GetContractById(contractId, contract =>
+            {
+                if (contract == null)
+                {
+                    Debug.LogWarning($"❌ Contract not found: {contractId}");
+                    return;
+                }
+
+                if (contract.IsCopy)
+                {
+                    Debug.LogWarning($"🚫 Cannot buy a copy contract: {contract.Title}");
+                    return;
+                }
+
+                if (!contract.HasStateOnDate(selectedDay, SmartContractState.ReadyToBuy))
+                {
+                    Debug.Log($"ℹ️ Contract is not ReadyToBuy on {selectedDay:yyyy-MM-dd}");
+                    return;
+                }
+
+                _contractService.SetContractStateOnDate(contract.Id, selectedDay, SmartContractState.Purchased, success =>
+                {
+                    if (!success)
+                    {
+                        Debug.LogWarning($"❌ Failed to set state to Purchased for contract: {contract.Title}");
+                        return;
+                    }
+
+                    _balanceService.AdjustBalance(
+                        _currentChild.Uid,
+                        -contract.RewardAmount,
+                        $"Contract '{contract.Title}' purchased",
+                        recordHistory: false
+                    );
+
+                    _view.UpdateReports(_currentChild, _allContracts);
+
+                    Debug.Log($"✅ Contract purchased: {contract.Title} | Amount: -{contract.RewardAmount}");
+                });
+            });
+        }
+        
+        protected void UndoPurchaseContract(string contractId, DateTime selectedDay)
+        {
+            if (selectedDay == default)
+            {
+                Debug.LogWarning("❌ No selected day provided.");
+                return;
+            }
+
+            _contractService.GetContractById(contractId, contract =>
+            {
+                if (contract == null)
+                {
+                    Debug.LogWarning($"❌ Contract not found: {contractId}");
+                    return;
+                }
+
+                if (!contract.HasStateOnDate(selectedDay, SmartContractState.Purchased))
+                {
+                    Debug.Log($"ℹ️ Contract was not purchased on {selectedDay:yyyy-MM-dd}");
+                    return;
+                }
+
+                _contractService.SetContractStateOnDate(contract.Id, selectedDay, SmartContractState.ReadyToBuy, success =>
+                {
+                    if (!success)
+                    {
+                        Debug.LogWarning($"❌ Failed to undo purchase for contract: {contract.Title}");
+                        return;
+                    }
+
+                    _balanceService.AdjustBalance(
+                        _currentChild.Uid,
+                        contract.RewardAmount,
+                        $"↩️ Undo purchase of '{contract.Title}'",
+                        recordHistory: false
+                    );
+
+                    _view.UpdateReports(_currentChild, _allContracts);
+
+                    Debug.Log($"↩️ Purchase undone: {contract.Title} | Amount restored: +{contract.RewardAmount}");
+                });
+            });
+        }
+
+
+        
+        /*protected void BuyContract(string contractId)
         {
             if (_selectedDay == default)
             {
@@ -185,7 +281,7 @@ namespace _App.Dashboard
                     Debug.Log($"✅ Contract purchased: {contract.Title} | Amount: -{contract.RewardAmount}");
                 });
             });
-        }
+        }*/
 
         protected int GetNextAsNeededQueueIndex(SmartContractModel parentContract, DateTime date)
         {

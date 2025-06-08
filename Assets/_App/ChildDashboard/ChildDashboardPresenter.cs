@@ -13,6 +13,7 @@ namespace _App.ChildDashboard
         private readonly IChildContractListenerService _contractListenerService;
         private readonly IBalanceListenerService _balanceListenerService;
         private readonly IncomeDistributorService _distributorService = new();
+        public List<SmartContractModel> GetAllContracts() => _allContracts;
 
         private readonly float _asNeededReSetDelay = 30f;
 
@@ -346,10 +347,10 @@ namespace _App.ChildDashboard
             return int.TryParse(queuePart, out int result) ? result : -1;
         }
         
-        public void ChildBuyAdminSellContract(string contractId) => 
-            BuyContract(contractId);
+        public void ChildBuyAdminSellContract(string contractId, DateTime selectedDay) => 
+            BuyContract(contractId, selectedDay);
         
-        public void UndoPurchaseContract(string contractId)
+        public new void UndoPurchaseContract(string contractId, DateTime selectedDay)
         {
             if (_selectedDay == default)
             {
@@ -374,7 +375,7 @@ namespace _App.ChildDashboard
 
                 contract.LoadStateHistory();
 
-                string key = _selectedDay.ToString("yyyy-MM-dd");
+                string key = selectedDay.ToString("yyyy-MM-dd");
 
                 if (!contract.StateHistory.TryGetValue(key, out var records) ||
                     !records.Any(r => r.State == SmartContractState.Purchased))
@@ -400,7 +401,7 @@ namespace _App.ChildDashboard
                     {
                         Debug.Log($"↩️ Purchase undone: {contract.Title} reverted to ReadyToBuy (+{contract.RewardAmount})");
 
-                        _distributorService.UndoDistribution(
+                        _distributorService.UndoPurchaseContract(
                             _currentChild.Uid,
                             contract.RewardAmount,
                             $"Undo purchase of contract '{contract.Title}'"

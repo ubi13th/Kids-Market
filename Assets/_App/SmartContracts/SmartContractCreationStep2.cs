@@ -165,6 +165,8 @@ public class SmartContractCreationStep2 : MonoBehaviour
     {
         // ✅ Show child assignment block (if applicable)
         ShowAssignsBlockIfMultipleChildren(_presenter.GetAllChildren());
+
+        CloseDueTimeSelectionPanel();
         
         openIconPickerButton.onClick.AddListener(OpenContractIconPicker);
         rewardPlusButton.onClick.AddListener(() => AdjustReward(+1));
@@ -843,6 +845,112 @@ public class SmartContractCreationStep2 : MonoBehaviour
         if (dueTimeToggle.isOn)
             SaveDueTime();
 
+        //string originalId = SmartContractDraft.Id;
+        string originalAssignedUid = SmartContractDraft.AssignedToUid;
+
+        var selectedKids = _assignedChildrenList
+            .Where(kv => kv.Value)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        // Fallback to original child if none re-selected
+        if (selectedKids.Count == 0 && !string.IsNullOrEmpty(originalAssignedUid))
+            selectedKids.Add(originalAssignedUid);
+
+        foreach (var childUid in selectedKids)
+        {
+            // In edit mode, skip children not originally assigned
+            if (!step1.isCreatingNewContract && childUid != originalAssignedUid)
+                continue;
+
+            var contract = BuildContract(childUid);
+
+            if (step1.isCreatingNewContract)
+                contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
+
+            _presenter.SaveContract(contract);
+        }
+
+        if (saveAsPresetToggle != null && saveAsPresetToggle.isOn)
+            SavePreset();
+
+        Debug.Log($"✅ Contract(s) saved for {selectedKids.Count} child(ren): {SmartContractDraft.Title}");
+
+        SmartContractDraft.Reset();
+        gameObject.SetActive(false);
+        contractCreatorPanel.SetActive(false);
+    }
+
+    private SmartContractModel BuildContract(string childUid)
+    {
+        var repeatDays = SmartContractDraft.RepeatDaysPerChild.TryGetValue(childUid, out var value)
+            ? value
+            : SmartContractDraft.RepeatDaysPerChild.Values.FirstOrDefault() ?? new List<DayOfWeek>();
+
+        string dueTimeStr;
+        try
+        {
+            dueTimeStr = SmartContractDraft.DueTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+        }
+        catch (FormatException e)
+        {
+            Debug.LogWarning($"⚠️ Invalid due time format: {e.Message}. Defaulting to 00:00");
+            dueTimeStr = "00:00";
+        }
+
+        var contract = new SmartContractModel
+        {
+            Title = SmartContractDraft.Title,
+            IconPath = SmartContractDraft.IconPath,
+            RewardAmount = SmartContractDraft.RewardAmount,
+            RequirePhotoProof = SmartContractDraft.RequiresPhotoProof,
+            RequireParentalApproval = SmartContractDraft.RequiresParentalApproval,
+            RequireNotificationOnThisDevice = SmartContractDraft.RequireNotificationOnThisDevice,
+            RepeatMode = SmartContractDraft.RepeatMode,
+            RepeatDays = repeatDays,
+            StartDate = SmartContractDraft.StartDate.ToString("yyyy-MM-dd"),
+            DueTime = dueTimeStr,
+            AssignedToUid = childUid,
+            AdminUID = _presenter.AdminUID,
+            Id = (SmartContractDraft.OriginalModel != null &&
+                  SmartContractDraft.OriginalModel.AssignedToUid == childUid)
+                ? SmartContractDraft.OriginalModel.Id
+                : null
+        };
+
+        // ✅ Preserve state history when editing
+        if (SmartContractDraft.OriginalModel != null &&
+            SmartContractDraft.OriginalModel.AssignedToUid == childUid &&
+            !string.IsNullOrEmpty(SmartContractDraft.OriginalModel.stateHistoryRaw))
+        {
+            contract.stateHistoryRaw = SmartContractDraft.OriginalModel.stateHistoryRaw;
+            contract.LoadStateHistory();
+        }
+
+        return contract;
+    }
+    
+    
+    /*private void SaveContract()
+    {
+        if (_rewardAmount <= 0f)
+        {
+            Debug.LogWarning("⚠️ Reward must be greater than 0.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(contractTitleText.text))
+        {
+            Debug.LogWarning("⚠️ Contract title is required.");
+            return;
+        }
+
+        SmartContractDraft.Title = contractTitleText.text;
+        SmartContractDraft.SetStartDate(SmartContractDraft.StartDate.Date);
+
+        if (dueTimeToggle.isOn)
+            SaveDueTime();
+
         string originalId = SmartContractDraft.Id;
         string originalAssignedUid = SmartContractDraft.AssignedToUid;
 
@@ -860,9 +968,26 @@ public class SmartContractCreationStep2 : MonoBehaviour
             // In edit mode, skip unintended children
             if (!step1.isCreatingNewContract && childUid != originalAssignedUid)
                 continue;
+            
+            SmartContractModel existing = _visibleContracts.FirstOrDefault(c => c.AssignedToUid == childUid);
 
-            var contract = BuildContract(childUid, originalAssignedUid, originalId);
-            contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
+            var contract = BuildContract(childUid, existing);
+
+            if (step1.isCreatingNewContract)
+                contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
+
+            // var contract = BuildContract(childUid, originalAssignedUid, originalId);
+            //
+            // // ✅ Preserve history if editing existing contract
+            // if (!step1.isCreatingNewContract && step1.existingContract != null)
+            // {
+            //     contract.stateHistoryRaw = step1.existingContract.stateHistoryRaw;
+            //     contract.LoadStateHistory(); // ensures the dictionary is populated
+            // }
+            //
+            // if (step1.isCreatingNewContract)
+            //     contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
+            
             _presenter.SaveContract(contract);
         }
 
@@ -874,9 +999,9 @@ public class SmartContractCreationStep2 : MonoBehaviour
         SmartContractDraft.Reset();
         gameObject.SetActive(false);
         contractCreatorPanel.SetActive(false);
-    }
+    }*/
 
-    private SmartContractModel BuildContract(string childUid, string originalAssignedUid, string originalId)
+    /*private SmartContractModel BuildContract(string childUid, string originalAssignedUid, string originalId)
     {
         var mode = SmartContractDraft.RepeatMode;
 
@@ -911,7 +1036,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
             AdminUID = _presenter.AdminUID,
             Id = (childUid == originalAssignedUid && !string.IsNullOrEmpty(originalId)) ? originalId : null
         };
-    }
+    }*/
 
     private void SavePreset()
     {
@@ -945,96 +1070,6 @@ public class SmartContractCreationStep2 : MonoBehaviour
         PresetStorage.SavePreset(preset);
         SmartContractCreationStep1.OnPresetSaved?.Invoke();
     }
-
-    /*private void SaveContract()
-    {
-        if (_rewardAmount <= 0f)
-        {
-            Debug.LogWarning("⚠️ Reward must be greater than 0.");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(contractTitleText.text))
-        {
-            Debug.LogWarning("⚠️ Contract title is required.");
-            return;
-        }
-
-        SmartContractDraft.Title = contractTitleText.text;
-        SmartContractDraft.SetStartDate(SmartContractDraft.StartDate.Date);
-
-        if (dueTimeToggle.isOn)
-            SaveDueTime();
-
-        string originalId = SmartContractDraft.Id;
-        string originalAssignedUid = SmartContractDraft.AssignedToUid;
-
-        var selectedKids = _assignedChildrenList
-            .Where(kv => kv.Value)
-            .Select(kv => kv.Key)
-            .ToList();
-
-        if (selectedKids.Count == 0 && !string.IsNullOrEmpty(originalAssignedUid))
-            selectedKids.Add(originalAssignedUid);
-
-        foreach (var childUid in selectedKids)
-        {
-            // ✅ Skip unintended children in edit mode
-            if (!step1.isCreatingNewContract && childUid != SmartContractDraft.AssignedToUid)
-                continue;
-            
-            var mode = SmartContractDraft.RepeatMode;
-            
-            var repeatDays =
-                SmartContractDraft.RepeatDaysPerChild.TryGetValue(childUid, out var value)
-                ? value
-                : new List<DayOfWeek>(SmartContractDraft.RepeatDaysPerChild.Values.FirstOrDefault() ?? new());
-            
-            var contract = new SmartContractModel
-            {
-                Title = SmartContractDraft.Title,
-                IconPath = SmartContractDraft.IconPath,
-                RewardAmount = SmartContractDraft.RewardAmount,
-                RequirePhotoProof = SmartContractDraft.RequiresPhotoProof,
-                RequireParentalApproval = SmartContractDraft.RequiresParentalApproval,
-                RequireNotificationOnThisDevice = SmartContractDraft.RequireNotificationOnThisDevice,
-                RepeatMode = mode,
-                RepeatDays = repeatDays,
-                StartDate = SmartContractDraft.StartDate.ToString("yyyy-MM-dd"),
-                DueTime = SmartContractDraft.DueTime.ToString(@"hh\:mm"),
-                AssignedToUid = childUid,
-                AdminUID = _presenter.AdminUID,
-                Id = (childUid == originalAssignedUid && !string.IsNullOrEmpty(originalId)) ? originalId : null
-            };
-            
-            contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
-            _presenter.SaveContract(contract);
-        }
-
-        if (saveAsPresetToggle != null && saveAsPresetToggle.isOn)
-        {
-            var preset = new SmartContractCustomPreset
-            {
-                title = SmartContractDraft.Title,
-                iconPath = SmartContractDraft.IconPath,
-                defaultReward = SmartContractDraft.RewardAmount,
-                startDate = SmartContractDraft.StartDate.ToString("yyyy-MM-dd"),
-                dueTime = SmartContractDraft.DueTime.ToString(@"hh\:mm"),
-                repeatMode = SmartContractDraft.RepeatMode,
-                repeatDays = new List<DayOfWeek>(SmartContractDraft.RepeatDaysPerChild.Values.FirstOrDefault() ?? new List<DayOfWeek>()),
-                requiresPhotoProof = SmartContractDraft.RequiresPhotoProof,
-                requiresParentalApproval = SmartContractDraft.RequiresParentalApproval,
-                requireNotificationOnThisDevice = SmartContractDraft.RequireNotificationOnThisDevice
-            };
-
-            PresetStorage.SavePreset(preset);
-            SmartContractCreationStep1.OnPresetSaved?.Invoke();
-        }
-
-        SmartContractDraft.Reset();
-        gameObject.SetActive(false);
-        contractCreatorPanel.SetActive(false);
-    }*/
     
     //------------------------------------------------
     

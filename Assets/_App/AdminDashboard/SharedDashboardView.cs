@@ -1,16 +1,14 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using _App.Balance;
 using _App.Bootstrap;
 using _App.ChildDashboard;
 using _App.Dashboard;
-using _App.Models;
+using _App.Reports;
 using _App.Services;
 using _App.Services.BalanceService;
 using _App.Settings;
-using _App.UI.Scripts;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -24,6 +22,9 @@ namespace _App.AdminDashboard
         [SerializeField] private AddChildFromAdminUI addChildFromAdminUI;
         [SerializeField] private BalanceDashboardView balanceDashboardView;
         [SerializeField] private HistoryPresenter historyPresenter;
+        [SerializeField] private ContractHistoryPresenter contractHistoryPresenter;
+        [SerializeField] private WeekNavigator weekNavigator;
+
         [Header("Profile & Child")]
         [SerializeField] private Button profileAvatarButton;
         [SerializeField] private Image profileAvatarImage;
@@ -52,6 +53,7 @@ namespace _App.AdminDashboard
         [SerializeField] private GameObject contractCreatorSettingsPanel;
         [SerializeField] private Transform childSelectorPanel;
         [SerializeField] private Transform newProfileCreatorPanel;
+        [SerializeField] private GameObject reportsPanel;
         [SerializeField] private GameObject rewardPanel;
         [SerializeField] private GameObject adjustBalancePanel;
 
@@ -190,6 +192,27 @@ namespace _App.AdminDashboard
             ChildModel child = _presenter?.CurrentChild;
             var childUid = _presenter?.CurrentChild?.Uid; // From your presenter or model
             historyPresenter.Initialize(child, childUid);
+            
+            List<SmartContractModel> allContracts = _presenter.GetAllContracts();
+                    
+            var selectedChildId = _presenter.CurrentChild?.Uid;
+
+            List<SmartContractModel> filteredContracts = allContracts
+                .Where(c => c.AssignedToUid == selectedChildId)
+                .Where(c => 
+                    c.RepeatMode == RepeatType.EveryDay || 
+                    c.RepeatMode == RepeatType.SpecificDays)
+                .ToList();
+                    
+            weekNavigator.OnWeekChanged += weekStart =>
+            {
+                weekNavigator.Show(weekStart);
+                contractHistoryPresenter.Initialize(child, filteredContracts, weekStart, _presenter);
+            };
+                    
+            // Force trigger for current week
+            var currentWeekStart = new DateService().GetWeekStart(DateTime.Today);
+            weekNavigator.OnWeekChanged?.Invoke(currentWeekStart);
         }
         
         public void SetupCalendarButtons()
@@ -527,11 +550,11 @@ namespace _App.AdminDashboard
             foreach (var contract in contracts)
             {
                 //Debug.Log($"🧱 Instantiating: {contract.Title} | IsCopy: {contract.IsCopy} | Repeat: {contract.RepeatMode}");
-                InstantiateContractUI(contract);
+                InstantiateContractUI(contract, selectedDay);
             }
         }
         
-        private void InstantiateContractUI(SmartContractModel contract)
+        private void InstantiateContractUI(SmartContractModel contract, DateTime selectedDay)
         {
             GameObject item = Instantiate(contractEntryPrefab, contractListContainer);
             var view = item.GetComponent<SmartContractView>();
@@ -543,7 +566,7 @@ namespace _App.AdminDashboard
             }
             
             view?.Setup(_presenter);
-            view?.Initialize(contract);
+            view?.Initialize(contract, selectedDay);
         }
          
         public void HighlightDayInCalendar(DateTime selectedDay)
@@ -624,7 +647,35 @@ namespace _App.AdminDashboard
                 Debug.LogWarning("❌ Attempted to open contract creator with non-admin presenter.");
             }
         }
-        
+
+        public void UpdateReports(ChildModel child, List<SmartContractModel> allContracts)
+        {
+            if(!reportsPanel.activeInHierarchy)
+                return;
+                
+            historyPresenter.Initialize(child, child.Uid);
+            var selectedChildId = child.Uid;
+
+            List<SmartContractModel> filteredContracts = allContracts
+                .Where(c => c.AssignedToUid == selectedChildId)
+                .Where(c => 
+                    c.RepeatMode == RepeatType.EveryDay || 
+                    c.RepeatMode == RepeatType.SpecificDays)
+                .ToList();
+                    
+            weekNavigator.OnWeekChanged += weekStart =>
+            {
+                weekNavigator.Show(weekStart);
+                contractHistoryPresenter.Initialize(child, filteredContracts, weekStart, _presenter);
+            };
+                    
+            // Force trigger for current week
+            var currentWeekStart = new DateService().GetWeekStart(DateTime.Today);
+            weekNavigator.OnWeekChanged?.Invoke(currentWeekStart);
+
+            contractHistoryPresenter.HideReadyToBuyBlock();
+        }
+
         public void OnAdminSurpriseButtonClick()
         {
             Debug.Log("On Child surprise contract clicked");

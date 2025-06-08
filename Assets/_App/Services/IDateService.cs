@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using _App.Models;
 
 namespace _App.Services
 {
@@ -9,8 +10,12 @@ namespace _App.Services
         List<DateTime> GetCurrentWeekDays();
         DateTime GetWeekStart(DateTime referenceDay);
         bool IsSameWeek(DateTime a, DateTime b);
-
-        // Optional, but recommended for testability/configuration
         DayOfWeek WeekStartsOn { get; }
+
+        // ✅ Newly added:
+        List<DateTime> GetFutureVisibleDates(SmartContractModel contract, int maxDays = 365);
+        List<DateTime> GetWeekStartDatesRange(DateTime from, DateTime to);
+        DateTime GetPreviousWeekStart(DateTime current);
+        DateTime GetNextWeekStart(DateTime current);
     }
 }

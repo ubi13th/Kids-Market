@@ -104,5 +104,11 @@ namespace _App.Services.BalanceService
                 });
             });
         }
+        
+        public void UndoPurchaseContract(string childUid, float amount, string reason)
+        {
+            if (amount <= 0f) return;
+            _balanceService.AdjustBalance(childUid, amount, reason, recordHistory: false);
+        }
     }
 }

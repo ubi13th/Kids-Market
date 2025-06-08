@@ -156,6 +156,8 @@ namespace _App.Balance
             creditButtonText.color = credit ? greenColor : lightGreyColor;
 
             debitCreditText.text = isDebit ? "-" : "+";
+            
+            UpdateBalanceDisplay();
         }
 
         private void AdjustMinus() => SetAdjustMode(true);

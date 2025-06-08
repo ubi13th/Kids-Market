@@ -23,6 +23,8 @@ namespace _App.Balance
         {
             foreach (Transform child in entryContainer)
                 Destroy(child.gameObject);
+            
+            Debug.Log("History Show");
 
             _currentRewardType = currentChild.RewardPreference;
 
@@ -31,8 +33,8 @@ namespace _App.Balance
             foreach (var group in grouped)
             {
                 // ───── Date Header ─────
-                GameObject headerGO = Instantiate(headerPrefab, entryContainer);
-                var headerText = headerGO.GetComponentInChildren<TextMeshProUGUI>();
+                GameObject header = Instantiate(headerPrefab, entryContainer);
+                var headerText = header.GetComponentInChildren<TextMeshProUGUI>();
                 headerText.text = FormatDateLabel(group.Key);
 
                 // ───── Entries ─────

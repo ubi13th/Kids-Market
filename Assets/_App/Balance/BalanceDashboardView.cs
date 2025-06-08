@@ -440,5 +440,10 @@ namespace _App.Balance
         {
             throw new NotImplementedException();
         }
+
+        public void UpdateReports(ChildModel child, List<SmartContractModel> allContracts)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

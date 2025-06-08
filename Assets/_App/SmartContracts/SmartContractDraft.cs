@@ -12,6 +12,8 @@ using System.Collections.Generic;
 
 public static class SmartContractDraft
 {
+    public static SmartContractModel OriginalModel { get; private set; }
+
     public static string Title { get; set; }
     public static string IconPath { get; set; }
     public static float RewardAmount { get; set; }
@@ -32,6 +34,8 @@ public static class SmartContractDraft
 
     public static void Reset(string assignedToUid = "")
     {
+        OriginalModel = null;
+
         Title = string.Empty;
         IconPath = string.Empty;
         RewardAmount = 0f;
@@ -81,6 +85,8 @@ public static class SmartContractDraft
     {
         if (model == null)
             throw new ArgumentNullException(nameof(model));
+        
+        OriginalModel = model; // ✅ Remember original for stateHistory preservation
 
         Title = model.Title;
         IconPath = model.IconPath;
