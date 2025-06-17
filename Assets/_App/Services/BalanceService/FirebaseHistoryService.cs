@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using _App.Balance;
 using _App.Bootstrap;
-using _App.Models;
 using Firebase.Database;
 using Firebase.Extensions;
 using Newtonsoft.Json;

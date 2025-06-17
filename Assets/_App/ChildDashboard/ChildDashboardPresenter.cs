@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using _App.Dashboard;
+using _App.Models;
 using _App.Services;
 using _App.Services.BalanceService;
 using UnityEngine;
@@ -13,6 +14,10 @@ namespace _App.ChildDashboard
         private readonly IChildContractListenerService _contractListenerService;
         private readonly IBalanceListenerService _balanceListenerService;
         private readonly IncomeDistributorService _distributorService = new();
+        
+        private ExtraRewardModel _currentExtraReward;
+        private RewardType _type;
+        
         public List<SmartContractModel> GetAllContracts() => _allContracts;
 
         private readonly float _asNeededReSetDelay = 30f;
@@ -32,7 +37,7 @@ namespace _App.ChildDashboard
             _contractListenerService = contractListenerService;
             _balanceListenerService = balanceListenerService;
         }
-
+        
         public void Initialize(string childUID)
         {
             _selectedDay = _dateService.GetCurrentDay();
@@ -47,10 +52,9 @@ namespace _App.ChildDashboard
                 }
 
                 Debug.Log($"✅ Loaded child: {child.DisplayName}");
-
                 SetCurrentChild(child);
 
-                // ⛑️ AppSettingsService must call ContinueWithOnMainThread internally
+                // ⛑️ Load week start
                 _appSettingsService.LoadWeekStartsOn(child.AdminUID, loadedDay =>
                 {
                     DateService.SaveWeekStartDay(loadedDay);
@@ -58,17 +62,36 @@ namespace _App.ChildDashboard
                     _view.UpdateCalendarColors(_allContracts, child.Uid);
                 });
 
-                // ⛑️ ContractService listener must also run on main thread
+                // ✅ Contract listener
                 _contractListenerService.ListenToChildContracts(childUID, OnContractsChanged);
-                
-                _balanceListenerService.StopListening(_currentChild.Uid); // cleanup previous
-                _balanceListenerService.ListenToBalance(_currentChild.Uid, newBalance =>
+
+                // ✅ Balance listener
+                _balanceListenerService.StopListening(child.Uid);
+                _balanceListenerService.ListenToBalance(child.Uid, newBalance =>
                 {
                     _currentChild.Balance = newBalance;
                     _view.ShowChildBalance(newBalance);
                 });
 
-                // ✅ Daily updater only manipulates data, no UI — safe
+                // ✅ Reward listener
+                _rewardService.ListenToReward(child.Uid, reward =>
+                {
+                    if (reward == null)
+                    {
+                        Debug.Log("📭 Reward was removed.");
+                        _currentExtraReward = null;
+                        _view.ShowExtraRewardTitle("NO EXTRA REWARD YET");
+                        _view.ShowExtraRewardProgress(0, 0, _type);
+                        CheckExtraRewardEligibility();
+                        return;
+                    }
+
+                    Debug.Log($"📡 Reward changed for child {child.DisplayName}");
+                    _currentExtraReward = reward;
+                    ShowExtraRewardProgressUI();
+                });
+
+                // ✅ Update AsNeeded states if needed
                 new DailyContractStateUpdater().Run(childUID, isAdmin: false);
             });
         }
@@ -78,6 +101,8 @@ namespace _App.ChildDashboard
             _allContracts = allContracts ?? new List<SmartContractModel>();
             _view.UpdateCalendarColors(_allContracts, _currentChild.Uid);
             FilterAndShowContracts();
+            ShowExtraRewardProgressUI();
+            CheckExtraRewardEligibility();
         }
 
         public override void OnDaySelected(DateTime day)
@@ -105,6 +130,8 @@ namespace _App.ChildDashboard
                 Debug.LogWarning($"❌ Invalid contract ID format: {contractId}");
                 return;
             }
+            
+            //string realId = contractId;
 
             _contractService.GetContractById(realId, parent =>
             {
@@ -210,7 +237,6 @@ namespace _App.ChildDashboard
                 });
             });
         }
-
         
        private void ChildUndoConfirmContract(string contractId)
         {
@@ -219,13 +245,11 @@ namespace _App.ChildDashboard
                 Debug.LogWarning("❌ Selected day is not set for undo.");
                 return;
             }
-
-            // ✅ Normalize visual contract ID
-            if (!ContractIdHelper.TryNormalizeVisualContractId(contractId, out var realId, out var queueKeyFromVisualId))
-            {
-                Debug.LogWarning($"❌ Invalid contract ID format: {contractId}");
-                return;
-            }
+            
+            string realId = contractId;
+            string queueKeyFromVisualId = null;
+            if (contractId.Contains("#"))
+                ContractIdHelper.TryNormalizeVisualContractId(contractId, out realId, out queueKeyFromVisualId);
 
             _contractService.GetContractById(realId, contract =>
             {
@@ -350,7 +374,7 @@ namespace _App.ChildDashboard
         public void ChildBuyAdminSellContract(string contractId, DateTime selectedDay) => 
             BuyContract(contractId, selectedDay);
         
-        public new void UndoPurchaseContract(string contractId, DateTime selectedDay)
+        public void UndoPurchaseContract(string contractId, DateTime selectedDay)
         {
             if (_selectedDay == default)
             {
@@ -410,12 +434,143 @@ namespace _App.ChildDashboard
                 });
             });
         }
-        
-        public void OnChildSurpriseButtonPressed()
+
+        public void SaveContract(SmartContractModel contract)
         {
-            Debug.Log("🎁 Child surprise button pressed");
+            contract.AdminUID = _adminUID;
+
+            _contractService.SaveContract(contract, success =>
+            {
+                if (!success)
+                    Debug.LogWarning("❌ Failed to save contract");
+            });
         }
 
+        public void EditContract(string contractId)
+        {
+            // ✅ Normalize visual ID first
+            if (!ContractIdHelper.TryNormalizeVisualContractId(contractId, out var realId, out _))
+                realId = contractId;
+
+            _contractService.GetContractById(realId, contract =>
+            {
+                if (contract == null)
+                {
+                    Debug.LogWarning($"❌ Failed to load contract for editing: {realId}");
+                    return;
+                }
+                
+                Debug.Log($"🎯 Editing contract: {contract.Title} | ID: {contract.Id}");
+
+                SmartContractDraft.LoadFromModel(contract);
+                _view.OnChildSurpriseContractEdit(contract); // this triggers InitializeUI(contract)
+            });
+        }
+        
+        public void DeleteContract(string contractId)
+        {
+            _contractService.DeleteContract(contractId, success =>
+            {
+                if (!success)
+                    Debug.LogWarning("❌ Failed to delete contract");
+            });
+        }
+
+        public void OnChildSurpriseButtonPressed() => _view.OnChildSurpriseContractCreate();
+
+        public void OnRewardButtonPressed() => _view.OpenRewardPanel(false);
+        public void OpenExtraRewardCreator()
+        {
+            if (_currentChild == null)
+            {
+                Debug.LogWarning("❌ No child selected.");
+                return;
+            }
+
+            // Retrieve the existing reward for this child if it exists
+            _rewardService.LoadReward(_currentChild.Uid, existingReward =>
+            {
+                _view.ShowExtraRewardCreator(_currentChild.Uid, () =>
+                {
+                    Debug.Log("🎉 Extra reward created or cancelled.");
+                    CheckExtraRewardEligibility();
+                    ShowExtraRewardProgressUI();
+                }, existingReward);
+            });
+        }
+
+        public void ClaimExtraReward()
+        {
+            if (_currentChild == null) return;
+
+            _rewardService.LoadReward(_currentChild.Uid, reward =>
+            {
+                if (reward == null || reward.IsClaimed)
+                {
+                    Debug.LogWarning("Reward already claimed or not found.");
+                    return;
+                }
+
+                int fulfilled = 0;
+
+                foreach (var dayOfWeek in reward.SelectedDays)
+                {
+                    var date = GetClosestPastOrTodayDate(dayOfWeek);
+                    
+                    var contracts = _allContracts
+                        .Where(c => c.AssignedToUid == _currentChild.Uid)
+                        .Where(c => !c.IsCopy)
+                        .Where(c => c.RepeatMode == RepeatType.EveryDay || c.RepeatMode == RepeatType.SpecificDays)
+                        .Where(c => c.IsVisibleOn(date))
+                        .ToList();
+
+                    bool allComplete = contracts.Count > 0 && contracts.All(c =>
+                        c.HasStateOnDate(date, SmartContractState.Completed) ||
+                        c.HasStateOnDate(date, SmartContractState.Purchased));
+
+                    if (allComplete)
+                        fulfilled++;
+                }
+
+                if (fulfilled != reward.SelectedDays.Count)
+                {
+                    Debug.LogWarning("❌ Cannot claim reward: not all days fulfilled.");
+                    return;
+                }
+
+                reward.IsClaimed = true;
+
+                _rewardService.DeleteReward(_currentChild.Uid, deleted =>
+                {
+                    if (deleted)
+                    {
+                        Debug.Log($"🎉 Reward claimed and deleted by child: +{reward.RewardAmount}");
+                        
+                        _distributorService.DistributeIncome(
+                            _currentChild.Uid,
+                            reward.RewardAmount,
+                            $"Child Claimed Extra Reward: {reward.RewardTitle}"
+                        );
+
+                        _view.ShowRewardPayout(reward);
+                        CheckExtraRewardEligibility();
+                    }
+                    else
+                    {
+                        Debug.LogError("❌ Failed to delete reward after claiming (child).");
+                    }
+                });
+            });
+        }
+        
+        private DateTime GetClosestPastOrTodayDate(DayOfWeek targetDay)
+        {
+            var today = DateTime.Today;
+            int daysBack = ((int)today.DayOfWeek - (int)targetDay + 7) % 7;
+            return today.AddDays(-daysBack);
+        }
+
+        
         public void CleanupContractListenerService()
         {
             throw new NotImplementedException();
@@ -425,7 +580,7 @@ namespace _App.ChildDashboard
         {
             throw new NotImplementedException();
         }
-
+        
         public void Cleanup() => _contractListenerService.StopListening();
     }
 }

@@ -13,5 +13,7 @@ namespace _App.ChildDashboard
         void DeleteChild(string childId, Action<bool> callback);
         void GetAdminProfile(string adminUid, Action<UserModel> callback);
         void StopListening();
+        
+        ChildModel GetChildModel();
     }
 }

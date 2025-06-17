@@ -14,6 +14,8 @@ namespace _App.ChildDashboard
         
         private EventHandler<ValueChangedEventArgs> _childrenListener;
         private Query _childrenQuery;
+        
+        private ChildModel _currentChild;
 
         public FirebaseChildService() => 
             Init();
@@ -85,8 +87,7 @@ namespace _App.ChildDashboard
                 callback?.Invoke(task.IsCompletedSuccessfully);
             });
         }
-
-
+        
         public void GetChildById(string childId, Action<ChildModel> callback)
         {
             if (!_isReady)
@@ -104,6 +105,7 @@ namespace _App.ChildDashboard
                 }
 
                 var model = ParseChild(task.Result);
+                _currentChild = model; // ✅ Store the child here
                 callback?.Invoke(model);
             });
         }
@@ -285,5 +287,11 @@ namespace _App.ChildDashboard
                 Debug.Log("🛑 Stopped listening to children updates.");
             }
         }
+        
+        public ChildModel GetChildModel()
+        {
+            return _currentChild;
+        }
+
     }
 }

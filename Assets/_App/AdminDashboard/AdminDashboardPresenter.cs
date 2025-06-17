@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using _App.ChildDashboard;
 using _App.Dashboard;
+using _App.Models;
 using _App.Services;
 using _App.Services.BalanceService;
 using UnityEngine;
@@ -15,7 +16,11 @@ namespace _App.AdminDashboard
         private readonly IBalanceListenerService _balanceListenerService;
         private readonly IncomeDistributorService _distributorService = new();
         
+        private ExtraRewardModel _currentExtraReward;
+        private RewardType _type;
+        
         public List<SmartContractModel> GetAllContracts() => _allContracts;
+        private ExtraRewardModel _extraRewardModel = new();
         
         private string _pendingNewChildUid = null;
         
@@ -48,6 +53,7 @@ namespace _App.AdminDashboard
             });
 
             _childService.ListenToChildren(adminUID, OnChildrenUpdated);
+            
             _contractListenerService.ListenToAdminContracts(adminUID, OnContractsChanged);
 
             new DailyContractStateUpdater().Run(adminUID, isAdmin: true);
@@ -87,6 +93,10 @@ namespace _App.AdminDashboard
             {
                 _view.ShowExtraRewardStatus("No children linked.");
                 _currentChild = null;
+
+                Debug.Log("👶 No children found for admin. Prompting to create profile.");
+                _view.ShowNewProfileCreatorPanelWhenNoUserYet(); // 🔧 <- Add this line
+
                 return;
             }
 
@@ -134,6 +144,7 @@ namespace _App.AdminDashboard
         {
             _allContracts = allContracts ?? new List<SmartContractModel>();
             _view.UpdateCalendarColors(_allContracts, _currentChild.Uid);
+            _view.UpdateUIWhenNoContracts(_allContracts);
 
             if (_currentChild != null)
                 FilterAndShowContracts();
@@ -148,6 +159,8 @@ namespace _App.AdminDashboard
         public override void SetCurrentChild(ChildModel child)
         {
             base.SetCurrentChild(child);
+
+            _rewardService.StopListeningToReward();
             
             _balanceListenerService.StopListening(_currentChild.Uid); // cleanup previous
             _balanceListenerService.ListenToBalance(_currentChild.Uid, newBalance =>
@@ -159,7 +172,25 @@ namespace _App.AdminDashboard
             _view.UpdateCalendarColors(_allContracts, _currentChild.Uid);
             _view.UpdateReports(_currentChild, _allContracts);
             FilterAndShowContracts();
-            CheckExtraRewardEligibility();
+            
+            // ✅ Reward listener
+            // ✅ Reward listener
+            _rewardService.ListenToReward(child.Uid, reward =>
+            {
+                if (reward == null)
+                {
+                    Debug.Log("📭 Reward was removed.");
+                    _currentExtraReward = null;
+                    _view.ShowExtraRewardTitle("NO EXTRA REWARD YET");
+                    _view.ShowExtraRewardProgress(0, 0, _type);
+                    CheckExtraRewardEligibility();
+                    return;
+                }
+
+                Debug.Log($"📡 Reward changed for child {child.DisplayName}");
+                _currentExtraReward = reward;
+                ShowExtraRewardProgressUI();
+            });
         }
 
         public void OnAddContractButtonPressed()
@@ -203,6 +234,8 @@ namespace _App.AdminDashboard
                 Debug.LogWarning($"❌ Invalid contract ID format: {contractId}");
                 return;
             }
+            
+            //string realId = contractId;
 
             _contractService.GetContractById(realId, contract =>
             {
@@ -353,6 +386,11 @@ namespace _App.AdminDashboard
                 Debug.LogWarning($"❌ Invalid contract ID format: {contractId}");
                 return;
             }
+            
+            // string realId = contractId;
+            // string queueKeyFromVisualId = null;
+            // if (contractId.Contains("#"))
+            //     ContractIdHelper.TryNormalizeVisualContractId(contractId, out realId, out queueKeyFromVisualId);
 
             _contractService.GetContractById(realId, contract =>
             {
@@ -472,6 +510,13 @@ namespace _App.AdminDashboard
                 Debug.LogWarning($"❌ Invalid contract ID: {contractId}");
                 return;
             }
+            
+            // string realId = contractId;
+            // string queueKeyFromVisualId = null;
+
+            if (contractId.Contains("#"))
+                ContractIdHelper.TryNormalizeVisualContractId(contractId, out realId, out queueKeyFromVisualId);
+
 
             _contractService.GetContractById(realId, contract =>
             {
@@ -558,9 +603,9 @@ namespace _App.AdminDashboard
         public void ChildBuyAdminSellContract(string contractId, DateTime selectedDay) => 
             BuyContract(contractId, selectedDay);
 
-        public new void UndoPurchaseContract(string contractId, DateTime selectedDay)
+        public void UndoPurchaseContract(string contractId, DateTime selectedDay)
         {
-            if (_selectedDay == default)
+            if (selectedDay == default)
             {
                 Debug.LogWarning("❌ Selected day is not set.");
                 return;
@@ -653,27 +698,102 @@ namespace _App.AdminDashboard
                     Debug.LogWarning("❌ Failed to delete contract");
             });
         }
-
-        public override void PayoutExtraReward()
+        
+        
+        public void OpenExtraRewardCreator()
         {
-            base.PayoutExtraReward();
+            if (_currentChild == null)
+            {
+                Debug.LogWarning("❌ No child selected.");
+                return;
+            }
+
+            // Retrieve the existing reward for this child if it exists
+            _rewardService.LoadReward(_currentChild.Uid, existingReward =>
+            {
+                _view.ShowExtraRewardCreator(_currentChild.Uid, () =>
+                {
+                    Debug.Log("🎉 Extra reward created or cancelled.");
+                    CheckExtraRewardEligibility();
+                    ShowExtraRewardProgressUI();
+                }, existingReward);
+            });
         }
         
-        public void OnAdjustBalanceButtonPressed() => _view.OpenAdjustBalancePanel();
-        public void OnRewardButtonPressed() => _view.OpenRewardPanel();
-        public void OnAdminSurpriseButtonPressed() => _view.OnAdminSurpriseButtonClick();
-        public void OnChildSurpriseButtonPressed() => _view.OnChildSurpriseButtonClick();
-
-        public override void CheckExtraRewardEligibility()
+        public void ClaimExtraReward()
         {
             if (_currentChild == null) return;
 
-            var weekStart = _dateService.GetWeekStart(_selectedDay);
-            _rewardService.CheckExtraRewardEligibility(_currentChild.Uid, weekStart, eligible =>
+            _rewardService.LoadReward(_currentChild.Uid, reward =>
             {
-                _view.ShowExtraRewardEligible(eligible);
+                if (reward == null || reward.IsClaimed)
+                {
+                    Debug.LogWarning("Reward already claimed or not found.");
+                    return;
+                }
+
+                // Check if all days are fulfilled
+                int fulfilled = 0;
+
+                foreach (var dayOfWeek in reward.SelectedDays)
+                {
+                    var date = GetClosestPastOrTodayDate(dayOfWeek);
+
+                    var contracts = _allContracts
+                        .Where(c => c.AssignedToUid == _currentChild.Uid)
+                        .Where(c => !c.IsCopy)
+                        .Where(c => c.RepeatMode == RepeatType.EveryDay || c.RepeatMode == RepeatType.SpecificDays)
+                        .Where(c => c.IsVisibleOn(date))
+                        .ToList();
+
+                    bool allComplete = contracts.Count > 0 && contracts.All(c =>
+                        c.HasStateOnDate(date, SmartContractState.Completed) ||
+                        c.HasStateOnDate(date, SmartContractState.Purchased));
+
+                    if (allComplete)
+                        fulfilled++;
+                }
+
+                if (fulfilled != reward.SelectedDays.Count)
+                {
+                    Debug.LogWarning("❌ Cannot claim reward: not all days fulfilled.");
+                    return;
+                }
+
+                reward.IsClaimed = true;
+
+                _rewardService.DeleteReward(_currentChild.Uid, deleted =>
+                {
+                    if (deleted)
+                    {
+                        Debug.Log($"🎉 Reward claimed and deleted: +{reward.RewardAmount}");
+                        _distributorService.DistributeIncome(
+                            _currentChild.Uid,
+                            reward.RewardAmount,
+                            $"Admin Claimed Extra Reward: {reward.RewardTitle}"
+                        );
+
+                        _view.ShowRewardPayout(reward);
+                        CheckExtraRewardEligibility(); // Refresh
+                    }
+                    else
+                    {
+                        Debug.LogError("❌ Failed to delete reward after claiming.");
+                    }
+                });
             });
         }
+        
+        private DateTime GetClosestPastOrTodayDate(DayOfWeek targetDay)
+        {
+            var today = DateTime.Today;
+            int daysBack = ((int)today.DayOfWeek - (int)targetDay + 7) % 7;
+            return today.AddDays(-daysBack);
+        }
+        
+        public void OnAdjustBalanceButtonPressed() => _view.OpenAdjustBalancePanel();
+        public void OnRewardButtonPressed() => _view.OpenRewardPanel(true);
+        public void OnChildSurpriseButtonPressed() => _view.OnChildSurpriseContractCreate();
         
         public void BuildFamilyModelAsync(Action<FamilyModel> callback)
         {

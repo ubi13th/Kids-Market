@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using _App.Bootstrap;
 using Firebase.Database;
 using Firebase.Extensions;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace _App.Services
@@ -42,8 +43,11 @@ namespace _App.Services
                 {
                     try
                     {
+                        // var json = snapshot.GetRawJsonValue();
+                        // var contract = JsonUtility.FromJson<SmartContractModel>(json);
                         var json = snapshot.GetRawJsonValue();
-                        var contract = JsonUtility.FromJson<SmartContractModel>(json);
+                        var contract = JsonConvert.DeserializeObject<SmartContractModel>(json);
+                        
                         contract.Id = snapshot.Key;
 
                         if (string.IsNullOrEmpty(contract.StartDate) || !DateTime.TryParse(contract.StartDate, out _))

@@ -5,10 +5,13 @@ using _App.Balance;
 using _App.Bootstrap;
 using _App.ChildDashboard;
 using _App.Dashboard;
+using _App.ExtraReward;
+using _App.Models;
 using _App.Reports;
 using _App.Services;
 using _App.Services.BalanceService;
 using _App.Settings;
+using _App.SmartContracts;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -24,6 +27,8 @@ namespace _App.AdminDashboard
         [SerializeField] private HistoryPresenter historyPresenter;
         [SerializeField] private ContractHistoryPresenter contractHistoryPresenter;
         [SerializeField] private WeekNavigator weekNavigator;
+        [SerializeField] private SurpriseContractCreation surpriseContractCreation;
+        [SerializeField] private ExtraRewardCreatorView extraRewardCreatorView;
 
         [Header("Profile & Child")]
         [SerializeField] private Button profileAvatarButton;
@@ -33,9 +38,11 @@ namespace _App.AdminDashboard
         [SerializeField] private Transform childSelectorGrid;
         [SerializeField] private GameObject childSelectorItemPrefab;
         [SerializeField] private GameObject adminDoubleAvatar;
+        [SerializeField] private GameObject adminProfilePlusIcon;
         [SerializeField] private GameObject infoRewardIcon;
         [SerializeField] private GameObject editRewardIcon;
         [SerializeField] private GameObject smartContractPlusIcon;
+        [SerializeField] private GameObject youNeedToAddUserTextGo;
 
         [Header("Calendar")]
         [SerializeField] private Transform[] calendarDayButtonsContainers;
@@ -46,7 +53,24 @@ namespace _App.AdminDashboard
         [SerializeField] private Transform contractListContainer;
         [SerializeField] private GameObject contractEntryPrefab;
         [SerializeField] private Button addContractButton;
-
+        [SerializeField] private GameObject contractInfoPanel;
+        
+        [Header("Extra Reward")]
+        [SerializeField] private Button rewardButton;
+        [SerializeField] private TextMeshProUGUI extraRewardTitleText;
+        [SerializeField] private TextMeshProUGUI extraRewardProgressText;
+        [SerializeField] private Image extraRewardProgressFill;
+        [SerializeField] private TextMeshProUGUI extraRewardStatusText;
+        [SerializeField] private TextMeshProUGUI extraRewardAmountText;
+        [SerializeField] private Image extraRewardIcon;
+        [SerializeField] private Button claimExtraRewardButton;
+        
+        [Header("Surprise Contract")]
+        [SerializeField] private Button surpriseContractButton;
+        [SerializeField] private Image surpriseContractButtonBackground;
+        [SerializeField] private TextMeshProUGUI surpriseContractButtonLabel;
+        [SerializeField] private Image surpriseContractStateIcon;
+        
         [Header("Panels")]
         [SerializeField] private SmartContractCreationStep1 contractCreatorPanel;
         [SerializeField] private GameObject contractCreatorIconAvatarPanel;
@@ -59,14 +83,11 @@ namespace _App.AdminDashboard
 
         [Header("Buttons")]
         [SerializeField] private Button childSelectionExitButton;
-        [SerializeField] private Button rewardButton;
         [SerializeField] private Button adjustBalanceButton;
-        [SerializeField] private Button surpriseContractButton;
         [SerializeField] private Button addNewChildButton;
-        [SerializeField] private TextMeshProUGUI dateText;
-        [SerializeField] private TextMeshProUGUI extraRewardStatusText;
         
         [Header("Other UI")]
+        [SerializeField] private TextMeshProUGUI dateText;
         [SerializeField] private Scrollbar  dashboardScScrollbar;
         private bool _hasTriggeredRefresh = false;
         private const float PullThreshold = 1.2f; // drag beyond 1 = pull gesture
@@ -74,11 +95,16 @@ namespace _App.AdminDashboard
         private bool _hasSelectedToday = false;
         private bool _didAutoSelectToday = false;
 
-        [SerializeField] private Color redColor, lightRedColor, blueColor, greenColor, lightGreyColor, greyColor;
+        [SerializeField] private Color redColor, lightRedColor, blueColor, greenColor, lightGreyColor, greyColor, yellowColor, orangeColor, pinkColor;
 
         private IDashboardPresenter _presenter;
+        private IContractService _contractService;
+        private IRewardService _rewardService;
+        
         private readonly List<(Button button, DateTime date)> _calendarButtonData = new();
         private readonly Dictionary<string, GameObject> _childItemMap = new();
+        
+        public event Action OnChildInitialized;
 
         private bool _isAdmin;
         
@@ -102,6 +128,9 @@ namespace _App.AdminDashboard
         private async void Start()
         {
             await FirebaseInit.WaitUntilReady();
+            
+            _contractService = new FirebaseContractService();
+            _rewardService = new FirebaseRewardService();
 
             if (UserSession.IsAdmin)
             {
@@ -145,6 +174,9 @@ namespace _App.AdminDashboard
                     editSelectedUserView.Initialize(_presenter);
                     addChildFromAdminUI.Initialize(_presenter);
                     balanceDashboardView.Initialize(_presenter);
+                    
+                    _presenter.OnChildInitialized += HandleChildInitialized;
+
                 }
                 catch (Exception ex)
                 {
@@ -160,31 +192,74 @@ namespace _App.AdminDashboard
             
             _isAdmin = UserSession.IsAdmin;
             adminDoubleAvatar.SetActive(_isAdmin);
+            adminProfilePlusIcon.SetActive(_isAdmin);
             infoRewardIcon.SetActive(!_isAdmin);
             editRewardIcon.SetActive(_isAdmin);
             smartContractPlusIcon.SetActive(_isAdmin);
 
+            InitializeUI();
+        }
+
+        private void InitializeUI()
+        {
             if (_isAdmin)
             {
-                surpriseContractButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).OnAdminSurpriseButtonPressed());
+                surpriseContractButton.gameObject.SetActive(false);
+
+                childSelectionExitButton.onClick.RemoveAllListeners();
+                addContractButton.onClick.RemoveAllListeners();
+                adjustBalanceButton.onClick.RemoveAllListeners();
+                profileAvatarButton.onClick.RemoveAllListeners();
+                rewardButton.onClick.RemoveAllListeners();
+                claimExtraRewardButton.onClick.RemoveAllListeners();
+
                 childSelectionExitButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).OnExitSelectProfileButtonPressed());
                 addContractButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).OnAddContractButtonPressed());
-                rewardButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).OnRewardButtonPressed());
                 adjustBalanceButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).OnAdjustBalanceButtonPressed());
                 profileAvatarButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).OnSelectProfileButtonPressed());
                 addNewChildButton.onClick.AddListener(OpenNewProfileCreator);
+                rewardButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).OnRewardButtonPressed());
+                claimExtraRewardButton.onClick.AddListener(() => ((IAdminDashboardPresenter)_presenter).ClaimExtraReward());
             }
             else
             {
+                surpriseContractButton.gameObject.SetActive(true);
+                surpriseContractButton.onClick.RemoveAllListeners();
                 surpriseContractButton.onClick.AddListener(() => _presenter.OnChildSurpriseButtonPressed());
+
                 childSelectionExitButton.onClick.RemoveAllListeners();
                 addContractButton.onClick.RemoveAllListeners();
-                rewardButton.onClick.RemoveAllListeners();
                 adjustBalanceButton.onClick.RemoveAllListeners();
                 profileAvatarButton.onClick.RemoveAllListeners();
+                rewardButton.onClick.RemoveAllListeners();
+                claimExtraRewardButton.onClick.RemoveAllListeners();
+
+                rewardButton.onClick.AddListener(() => _presenter.OnRewardButtonPressed());
+                claimExtraRewardButton.onClick.AddListener(() => _presenter.ClaimExtraReward());
             }
             
             SetupCalendarButtons();
+        }
+
+        public void UpdateUIWhenNoContracts(List<SmartContractModel> allContracts)
+        {
+            contractInfoPanel.SetActive(allContracts.Count == 0);
+        }
+
+        private void HandleChildInitialized()
+        {
+            // Make sure this callback only runs once
+            _presenter.OnChildInitialized -= HandleChildInitialized;
+
+            // ✅ Pass required services once child is available
+            surpriseContractCreation.Initialize(_presenter, _contractService);
+        }
+        
+        public void ShowNewProfileCreatorPanelWhenNoUserYet()
+        {
+            addContractButton.gameObject.SetActive(false);
+            OpenNewProfileCreator();
+            youNeedToAddUserTextGo.SetActive(true);
         }
         
         public void OnOpenHistoryTab()
@@ -193,9 +268,9 @@ namespace _App.AdminDashboard
             var childUid = _presenter?.CurrentChild?.Uid; // From your presenter or model
             historyPresenter.Initialize(child, childUid);
             
-            List<SmartContractModel> allContracts = _presenter.GetAllContracts();
+            List<SmartContractModel> allContracts = _presenter?.GetAllContracts();
                     
-            var selectedChildId = _presenter.CurrentChild?.Uid;
+            var selectedChildId = _presenter?.CurrentChild?.Uid;
 
             List<SmartContractModel> filteredContracts = allContracts
                 .Where(c => c.AssignedToUid == selectedChildId)
@@ -384,6 +459,8 @@ namespace _App.AdminDashboard
             profileAvatarImage.sprite = AvatarLoader.LoadAvatar(child.AvatarPath);
             
             balanceDashboardView.OnChildSet(child);
+            
+            addContractButton.gameObject.SetActive(true);
         }
 
         public void ShowChildBalance(float balance) =>
@@ -428,11 +505,16 @@ namespace _App.AdminDashboard
                         var keysToday = contract.StateHistory.Keys
                             .Where(k => k.StartsWith(keyPrefix + "#"))
                             .ToList();
-
+                        
                         foreach (var queueKey in keysToday)
                         {
-                            var pseudoCopy = CreateVisualInstanceForQueue(contract, queueKey);
-                            AddToEveryDay(pseudoCopy);
+                            var state = contract.StateHistory[queueKey].FirstOrDefault()?.State ?? SmartContractState.None;
+                            
+                            if (state is SmartContractState.Completed or SmartContractState.ReadyToConfirm)
+                            {
+                                var pseudoCopy = CreateVisualInstanceForQueue(contract, queueKey);
+                                AddToEveryDay(pseudoCopy);
+                            }
                         }
                     }
                     else if (contract.ShouldAppearInEveryDayGroup(selectedDay))
@@ -565,8 +647,8 @@ namespace _App.AdminDashboard
                 return;
             }
             
-            view?.Setup(_presenter);
-            view?.Initialize(contract, selectedDay);
+            view.Setup(_presenter);
+            view.Initialize(contract, selectedDay);
         }
          
         public void HighlightDayInCalendar(DateTime selectedDay)
@@ -626,12 +708,6 @@ namespace _App.AdminDashboard
                 Debug.LogWarning("❌ Attempted to open edit panel with non-admin presenter.");
             }
         }
-
-        public void ShowExtraRewardStatus(string message)
-        {
-            if (extraRewardStatusText != null)
-                extraRewardStatusText.text = message;
-        }
         
         public void OpenContractCreator()
         {
@@ -676,16 +752,25 @@ namespace _App.AdminDashboard
             contractHistoryPresenter.HideReadyToBuyBlock();
         }
 
-        public void OnAdminSurpriseButtonClick()
+        //------------------- surprise button -----------------------------
+
+        public void OnChildSurpriseContractCreate() //SmartContractModel contract = null
         {
             Debug.Log("On Child surprise contract clicked");
+            surpriseContractCreation.Initialize(_presenter, _contractService);
+            surpriseContractCreation.InitializeUI();
         }
-
-        public void OnChildSurpriseButtonClick()
+        
+        public void OnChildSurpriseContractEdit(SmartContractModel contract = null)
         {
-            Debug.Log("On Admin surprise contract clicked");
+            Debug.Log("On Child surprise contract clicked");
+            surpriseContractCreation.Initialize(_presenter, _contractService);
+            surpriseContractCreation.InitializeUI(contract); // ✅ Use the contract here
         }
 
+        //------------------------------------------------------------------------------------
+
+        
         public void OpenProfileSelector() => 
             childSelectorPanel.gameObject.SetActive(true);
         
@@ -696,17 +781,89 @@ namespace _App.AdminDashboard
         {
             CloseProfileSelector();
             newProfileCreatorPanel.gameObject.SetActive(true);
+            youNeedToAddUserTextGo.SetActive(false);
         }
         
-        public void OpenRewardPanel() => 
-            rewardPanel.SetActive(true);
-
-        public void ShowExtraRewardEligible(bool eligible) => 
-            rewardButton.interactable = eligible;
+        //--------------------------- Extra Reward ----------------------------------------
         
-        public void ShowRewardPayout(RewardModel reward)
+        public void ShowExtraRewardStatus(string message)
         {
-            ShowExtraRewardStatus($"Reward given: {(reward.Type == RewardType.Event ? reward.Description : reward.Amount.ToString())}");
+            if (extraRewardStatusText != null)
+                extraRewardStatusText.text = message;
+        }
+        
+        public void ShowExtraRewardCreator(string childUid, Action onClose, ExtraRewardModel existingReward = null)
+        {
+            extraRewardCreatorView.Initialize(_isAdmin, childUid, _rewardService, onClose, existingReward);
+            
+            rewardPanel.SetActive(true);
+        }
+        
+        public void OpenRewardPanel(bool isAdmin)
+        {
+            if(isAdmin)
+            {
+                if (_presenter is IAdminDashboardPresenter adminPresenter)
+                    adminPresenter.OpenExtraRewardCreator();
+            }
+            else
+            {
+                _presenter.OpenExtraRewardCreator();
+            }
+        }
+        
+        public void ShowExtraRewardTitle(string rewardTitle)
+        {
+            if (extraRewardTitleText != null)
+                extraRewardTitleText.text = rewardTitle;
+
+            _rewardService.LoadReward(_presenter.CurrentChild.Uid, reward =>
+            {
+                if (reward == null)
+                    return;
+                
+                extraRewardIcon.sprite = ContractIconLoader.Load(reward.IconPath);
+                
+                extraRewardAmountText.gameObject.SetActive(true);
+                extraRewardAmountText.text = $"{reward.RewardAmount}";
+            });
+        }
+        
+        public void ShowExtraRewardProgress(int completed, int total, RewardType type)
+        {
+            extraRewardProgressText.text = $"{completed} / {total} Days Completed";
+            extraRewardProgressText.color = completed == total ? greenColor : greyColor;
+            extraRewardProgressFill.fillAmount = (float)completed / total;
+            
+            claimExtraRewardButton.gameObject.SetActive(completed == total && type == RewardType.Money);
+
+            if (total == 0)
+            {
+                extraRewardProgressText.text = "";
+                claimExtraRewardButton.gameObject.SetActive(false);
+            }
+        }
+        
+        public void ShowExtraRewardEligible(bool eligible)
+        {
+            if (!eligible)
+            {
+                extraRewardTitleText.text = "NO EXTRA REWARD YET";
+                extraRewardAmountText.gameObject.SetActive(false);
+                claimExtraRewardButton.gameObject.SetActive(false);
+                extraRewardProgressFill.fillAmount = 0f;
+                ShowExtraRewardStatus("");
+            }
+        }
+
+        public void ShowRewardPayout(ExtraRewardModel extraReward)
+        {
+            ShowExtraRewardStatus($"Reward given: {(extraReward.Type == RewardType.Event ? extraReward.EventDescription : extraReward.RewardAmount.ToString())}");
+        }
+        
+        private void ShowExtraRewardInfo()
+        {
+            
         }
     }
 }

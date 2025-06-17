@@ -60,8 +60,16 @@ public class AddChildFromAdminUI : MonoBehaviour
         moneyButton.onClick.AddListener(() => SetRewardType(RewardType.Money));
         pointsButton.onClick.AddListener(() => SetRewardType(RewardType.Points));
         noneButton.onClick.AddListener(() => SetRewardType(RewardType.None));
+        
+        nameInput.onSelect.AddListener(_ => ActivateCaret(nameInput));
 
         SetRewardType(RewardType.Money); // Default selection
+    }
+    
+    private void ActivateCaret(TMP_InputField field)
+    {
+        field.ActivateInputField();
+        field.caretPosition = field.text.Length;
     }
 
     private void CloseUserCreatorPanel()

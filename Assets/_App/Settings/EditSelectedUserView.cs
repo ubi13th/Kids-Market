@@ -68,6 +68,14 @@ namespace _App.Settings
             moneyButton.onClick.AddListener(() => SetRewardType(RewardType.Money));
             pointsButton.onClick.AddListener(() => SetRewardType(RewardType.Points));
             noneButton.onClick.AddListener(() => SetRewardType(RewardType.None));
+            
+            nameInput.onSelect.AddListener(_ => ActivateCaret(nameInput));
+        }
+        
+        private void ActivateCaret(TMP_InputField field)
+        {
+            field.ActivateInputField();
+            field.caretPosition = field.text.Length;
         }
 
         public void LoadChildForEdit(ChildModel child)

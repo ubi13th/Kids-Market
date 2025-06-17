@@ -18,7 +18,14 @@ public class ChildJoinHandler : MonoBehaviour
         {
             SignInAnonymously();
             joinButton.onClick.AddListener(OnJoinButtonPressed);
+            joinCodeInput.onSelect.AddListener(_ => ActivateCaret(joinCodeInput));
         });
+    }
+    
+    private void ActivateCaret(TMP_InputField field)
+    {
+        field.ActivateInputField();
+        field.caretPosition = field.text.Length;
     }
 
     private void SignInAnonymously()

@@ -44,6 +44,23 @@ public class SmartContractCreationStep1 : MonoBehaviour
         nextButton.onClick.AddListener(ProceedToStep2);
         openIconPickerButton.onClick.AddListener(OpenContractIconPicker);
         
+        contractNameInput.onValueChanged.AddListener(OnTitleChanged);
+        contractNameInput.onSelect.AddListener(_ => ActivateCaret(contractNameInput));
+
+        // Ensure initial state
+        OnTitleChanged(contractNameInput.text);
+
+        void OnTitleChanged(string text)
+        {
+            nextButton.interactable = !string.IsNullOrWhiteSpace(text);
+        }
+
+        void ActivateCaret(TMP_InputField field)
+        {
+            field.ActivateInputField();
+            field.caretPosition = field.text.Length;
+        }
+        
         OnPresetSaved += RefreshPresetList;
 
         RefreshPresetList();
@@ -54,6 +71,8 @@ public class SmartContractCreationStep1 : MonoBehaviour
         backButton.onClick.RemoveAllListeners();
         nextButton.onClick.RemoveAllListeners();
         openIconPickerButton.onClick.RemoveAllListeners();
+        
+        contractNameInput.onValueChanged.RemoveAllListeners();
         
         OnPresetSaved -= RefreshPresetList;
     }

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using TMPro;
 
@@ -11,6 +12,18 @@ namespace _App.Scripts.SignIns
         public TMP_InputField passwordField;
         public TextMeshProUGUI statusText;
 
+        private void Start()
+        {
+            emailField.onSelect.AddListener(_ => ActivateCaret(emailField));
+            passwordField.onSelect.AddListener(_ => ActivateCaret(passwordField));
+        }
+
+        private void ActivateCaret(TMP_InputField field)
+        {
+            field.ActivateInputField();
+            field.caretPosition = field.text.Length;
+        }
+        
         public void OnSignUpButtonPressed()
         {
             var email = emailField.text.Trim();

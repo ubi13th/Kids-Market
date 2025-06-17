@@ -59,11 +59,19 @@ namespace _App.Balance
             creditButton.onClick.AddListener(AdjustPlus);
             debitButton.onClick.AddListener(AdjustMinus);
 
-            fillAmountInput.onValidateInput += ValidateBalanceAmountInput;
+            //fillAmountInput.onValidateInput += ValidateBalanceAmountInput;
             fillAmountInput.onValueChanged.AddListener(OnBalanceAdjustInputChanged);
-
+            fillAmountInput.onSelect.AddListener(_ => ActivateCaret(fillAmountInput));
+            noteInputText.onSelect.AddListener(_ => ActivateCaret(noteInputText));
+            
             adjustPlusButton.onClick.AddListener(()=> AdjustBalance(+1));
             adjustMinusButton.onClick.AddListener(()=> AdjustBalance(-1));
+        }
+        
+        private void ActivateCaret(TMP_InputField field)
+        {
+            field.ActivateInputField();
+            field.caretPosition = field.text.Length;
         }
         
         private void ResetAdjustInputs()
@@ -195,10 +203,10 @@ namespace _App.Balance
             UpdateBalanceDisplay();
         }
     
-        private char ValidateBalanceAmountInput(string text, int charIndex, char addedChar)
-        {
-            return char.IsDigit(addedChar) || (_currentRewardType == RewardType.Money && addedChar == '.' && !text.Contains(".")) ? addedChar : '\0';
-        }
+        // private char ValidateBalanceAmountInput(string text, int charIndex, char addedChar)
+        // {
+        //     return char.IsDigit(addedChar) || (_currentRewardType == RewardType.Money && addedChar == '.' && !text.Contains(".")) ? addedChar : '\0';
+        // }
 
         private void UpdateBalanceDisplay()
         {

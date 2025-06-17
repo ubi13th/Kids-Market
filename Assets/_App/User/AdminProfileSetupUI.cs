@@ -22,6 +22,14 @@ public class AdminProfileSetupUI : MonoBehaviour
     {
         avatarButton.onClick.AddListener(OpenAvatarPicker);
         continueButton.onClick.AddListener(SaveProfile);
+        
+        nameInputField.onSelect.AddListener(_ => ActivateCaret(nameInputField));
+    }
+    
+    private void ActivateCaret(TMP_InputField field)
+    {
+        field.ActivateInputField();
+        field.caretPosition = field.text.Length;
     }
 
     public void Init(string userId)

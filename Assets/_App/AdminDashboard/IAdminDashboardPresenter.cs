@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using _App.Dashboard;
+using _App.Models;
 
 namespace _App.AdminDashboard
 {
@@ -10,16 +11,16 @@ namespace _App.AdminDashboard
         
         List<ChildModel> GetAllChildren();
 
-        void SaveContract(SmartContractModel contract);
-        void EditContract(string contractId);
-        void DeleteContract(string contractId);
+        //void SaveContract(SmartContractModel contract);
+        //void EditContract(string contractId);
+        //void DeleteContract(string contractId);
 
         void OnAddContractButtonPressed();
         void PrepareNewContractDraft();
         
-        void OnRewardButtonPressed();
+        //void OnRewardButtonPressed();
         void OnAdjustBalanceButtonPressed();
-        void OnAdminSurpriseButtonPressed();
+        //void OnChildSurpriseButtonPressed();
         void OnSelectProfileButtonPressed();
         void OnExitSelectProfileButtonPressed();
 
@@ -31,5 +32,9 @@ namespace _App.AdminDashboard
 
         void SetPendingNewChild(string childUid);
         void UpdateChildBalance(float delta, string reason, bool recordHistory = false);
+
+        //void OpenExtraRewardCreator();
+
+        //void ClaimExtraReward();
     }
 }

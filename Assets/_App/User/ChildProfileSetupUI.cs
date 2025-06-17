@@ -24,6 +24,14 @@ public class ChildProfileSetupUI : MonoBehaviour
     {
         avatarButton.onClick.AddListener(OpenAvatarPicker);
         saveButton.onClick.AddListener(SaveProfile);
+        
+        nameInput.onSelect.AddListener(_ => ActivateCaret(nameInput));
+    }
+    
+    private void ActivateCaret(TMP_InputField field)
+    {
+        field.ActivateInputField();
+        field.caretPosition = field.text.Length;
     }
 
     private void Start()

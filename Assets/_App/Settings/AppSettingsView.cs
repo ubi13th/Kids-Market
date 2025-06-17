@@ -23,6 +23,7 @@ namespace _App.Settings
         [SerializeField] private Button editProfilePanelBackButton;
         
         [Header("Week Start")]
+        [SerializeField] private GameObject weekStartsBlock;
         [SerializeField] private TMP_Dropdown weekStartDropdown;
 
         [Header("Family Members")]
@@ -41,16 +42,26 @@ namespace _App.Settings
         private IDashboardPresenter  _presenter;
         private IAdminDashboardPresenter  _adminPresenter;
 
+        private bool _isAdmin;
+
         public void Initialize(IDashboardPresenter presenter)
         {
             // Only set if the presenter supports admin settings
             if (presenter is IAdminDashboardPresenter admin)
                 _adminPresenter = admin;
             
+            _isAdmin = UserSession.IsAdmin;
+            
             // Hook up UI events
             familyButton.onClick.AddListener(OpenFamilyProfilePanel);
             familyPanelBackButton.onClick.AddListener(CloseFamilyProfilePanel);
             InitializeWeekStartDropdown();
+        }
+
+        private void OnEnable()
+        {
+            familyButton.gameObject.SetActive(_isAdmin);
+            weekStartsBlock.SetActive(_isAdmin);
         }
 
         public void OpenFamilyProfilePanel()

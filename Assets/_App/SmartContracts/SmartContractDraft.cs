@@ -13,6 +13,8 @@ using System.Collections.Generic;
 public static class SmartContractDraft
 {
     public static SmartContractModel OriginalModel { get; private set; }
+    
+    public static bool IsSurprise { get; set; }
 
     public static string Title { get; set; }
     public static string IconPath { get; set; }
@@ -35,6 +37,8 @@ public static class SmartContractDraft
     public static void Reset(string assignedToUid = "")
     {
         OriginalModel = null;
+        
+        IsSurprise = false;
 
         Title = string.Empty;
         IconPath = string.Empty;
@@ -77,6 +81,7 @@ public static class SmartContractDraft
             DueTime = DueTime.ToString(@"hh\:mm"),
             AssignedToUid = childUid,
             AdminUID = UserSession.CurrentUserId,
+            IsSurprise = IsSurprise,
             Id = null
         };
     }
@@ -87,7 +92,9 @@ public static class SmartContractDraft
             throw new ArgumentNullException(nameof(model));
         
         OriginalModel = model; // ✅ Remember original for stateHistory preservation
-
+        
+        IsSurprise = model.IsSurprise;
+        
         Title = model.Title;
         IconPath = model.IconPath;
         RewardAmount = model.RewardAmount;

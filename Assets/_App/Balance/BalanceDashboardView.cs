@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using _App.AdminDashboard;
 using _App.Dashboard;
-using _App.Models;
 using _App.Services.BalanceService;
 using TMPro;
 using UnityEngine;
@@ -60,6 +59,8 @@ namespace _App.Balance
         private IDashboardPresenter  _presenter;
         private IAdminDashboardPresenter  _adminPresenter;
         
+        public event Action OnChildInitialized;
+
         private FirebaseJarService _jarService;
 
         public void Initialize(IDashboardPresenter presenter)
@@ -86,14 +87,48 @@ namespace _App.Balance
 
             createNewJarButton.onClick.AddListener(OnNewJarButtonClicked);
             addNewJarButton.onClick.AddListener(OnNewJarButtonClicked);
-
-            amountInputField.onValidateInput += ValidateBalanceAmountInput;
+            
             amountInputField.onValueChanged.AddListener(OnBalanceAdjustInputChanged);
+            amountInputField.onSelect.AddListener(_ => ActivateCaret(amountInputField));
+            noteInputText.onSelect.AddListener(_ => ActivateCaret(noteInputText));
+            amountInputField.Select();
+            amountInputField.ActivateInputField();
             
             _jarService = new FirebaseJarService();
         }
-
+        
+        private void ActivateCaret(TMP_InputField input)
+        {
+            input.ActivateInputField();
+            input.caretPosition = input.text.Length;
+        }
+        
         private void GetCurrentJar()
+        {
+            _currentChildUId = _presenter?.CurrentChild?.Uid;
+
+            if (string.IsNullOrEmpty(_currentChildUId))
+                return;
+
+            _jarService.HasAnyJar(_currentChildUId, exists =>
+            {
+                jarIcon.SetActive(exists);
+            });
+
+            _jarService.GetJars(_currentChildUId, jars =>
+            {
+                if (jars == null || jars.Count == 0)
+                    return;
+
+                _goalAmount = jars[0].GoalAmount;
+                _currentSavedAmount = jars[0].SavedAmount;
+
+                UpdateJarFill();
+            });
+        }
+
+
+        /*private void GetCurrentJar()
         {
             _currentChildUId = _adminPresenter?.CurrentChild?.Uid ?? null;
             if(_currentChildUId == null)
@@ -111,7 +146,7 @@ namespace _App.Balance
                 
                 UpdateJarFill();
             });
-        }
+        }*/
 
         private IEnumerator AnimateJarFill(float targetFill)
         {
@@ -160,8 +195,18 @@ namespace _App.Balance
             plusButton.gameObject.SetActive(_currentRewardType != RewardType.None);
             minusButton.gameObject.SetActive(_currentRewardType != RewardType.None);
             
-            jarManagerView.Initialize(child.Uid, child); // reload jars
-            GetCurrentJar();
+            //jarManagerView.Initialize(child.Uid, child); // reload jars
+            //GetCurrentJar();
+            
+            _jarService.ListenToJars(child.Uid, updatedJars =>
+            {
+                //jarManagerView.Render(updatedJars); // or re-Initialize if needed
+                jarManagerView.Initialize(child.Uid, child); // reload jars
+                _goalAmount = updatedJars[0].GoalAmount;
+                _currentSavedAmount = updatedJars[0].SavedAmount;
+                UpdateJarFill();
+            });
+
         }
 
         private void OnNewJarButtonClicked()
@@ -232,11 +277,6 @@ namespace _App.Balance
 
             _debitCreditAmount = Mathf.Max(0, parsedValue);
             UpdateBalanceDisplay();
-        }
-    
-        private char ValidateBalanceAmountInput(string text, int charIndex, char addedChar)
-        {
-            return char.IsDigit(addedChar) || (_currentRewardType == RewardType.Money && addedChar == '.' && !text.Contains(".")) ? addedChar : '\0';
         }
 
         private void UpdateBalanceDisplay()
@@ -340,6 +380,16 @@ namespace _App.Balance
             UpdateBalanceDisplay();
             CloseAdjustPanel();
         }
+        
+        public void ShowNewProfileCreatorPanelWhenNoUserYet()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void UpdateUIWhenNoContracts(List<SmartContractModel> allContracts)
+        {
+            throw new NotImplementedException();
+        }
 
         public void ShowChildren(List<ChildModel> children)
         {
@@ -381,7 +431,7 @@ namespace _App.Balance
             throw new NotImplementedException();
         }
 
-        public void OpenRewardPanel()
+        public void OpenRewardPanel(bool isAdmin)
         {
             throw new NotImplementedException();
         }
@@ -391,12 +441,27 @@ namespace _App.Balance
             throw new NotImplementedException();
         }
 
+        public void ShowExtraRewardCreator(string childUid, Action onClose, ExtraRewardModel existingReward = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void ShowExtraRewardTitle(string rewardTitle)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void ShowExtraRewardProgress(int completed, int total, RewardType type)
+        {
+            throw new NotImplementedException();
+        }
+
         public void ShowExtraRewardEligible(bool eligible)
         {
             throw new NotImplementedException();
         }
 
-        public void ShowRewardPayout(RewardModel reward)
+        public void ShowRewardPayout(ExtraRewardModel extraReward)
         {
             throw new NotImplementedException();
         }
@@ -431,12 +496,12 @@ namespace _App.Balance
             throw new NotImplementedException();
         }
 
-        public void OnAdminSurpriseButtonClick()
+        public void OnChildSurpriseContractCreate() //SmartContractModel contract = null
         {
             throw new NotImplementedException();
         }
 
-        public void OnChildSurpriseButtonClick()
+        public void OnChildSurpriseContractEdit(SmartContractModel contract)
         {
             throw new NotImplementedException();
         }

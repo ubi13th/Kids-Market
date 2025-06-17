@@ -3,6 +3,7 @@ using System;
 using System.Threading.Tasks;
 using _App.Bootstrap;
 using Firebase.Extensions;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace _App.Services
@@ -61,7 +62,7 @@ namespace _App.Services
             Debug.Log($"🔍 Looking for AsNeeded copy with ParentId = {parentId}");
 
             FirebaseInit.DbRef
-                .Child("Contracts")
+                .Child(AppConstants.Contracts)
                 .OrderByChild("ParentId").EqualTo(parentId)
                 .GetValueAsync()
                 .ContinueWithOnMainThread(task =>
@@ -85,8 +86,10 @@ namespace _App.Services
                     foreach (var snapshot in task.Result.Children)
                     {
                         Debug.Log($"📦 Checking contract: {snapshot.Key}");
+                        // var json = snapshot.GetRawJsonValue();
+                        // var contract = JsonUtility.FromJson<SmartContractModel>(json);
                         var json = snapshot.GetRawJsonValue();
-                        var contract = JsonUtility.FromJson<SmartContractModel>(json);
+                        var contract = JsonConvert.DeserializeObject<SmartContractModel>(json);
                         contract.Id = snapshot.Key;
 
                         if (contract.IsCopy && contract.RepeatMode == RepeatType.AsNeeded)
@@ -149,7 +152,8 @@ namespace _App.Services
                 refToUse = ContractsRef.Child(contract.Id);
             }
 
-            string json = JsonUtility.ToJson(contract);
+            //string json = JsonUtility.ToJson(contract);
+            string json = JsonConvert.SerializeObject(contract);
             Debug.Log($"📤 Saving JSON: {json}");
             
             refToUse.SetRawJsonValueAsync(json)
@@ -190,8 +194,11 @@ namespace _App.Services
 
                     try
                     {
+                        // var json = task.Result.GetRawJsonValue();
+                        // var contract = JsonUtility.FromJson<SmartContractModel>(json);
                         var json = task.Result.GetRawJsonValue();
-                        var contract = JsonUtility.FromJson<SmartContractModel>(json);
+                        var contract = JsonConvert.DeserializeObject<SmartContractModel>(json);
+                        
                         contract.Id = contractId;
     
                         // ✅ Deserialize CompletionHistory string into list

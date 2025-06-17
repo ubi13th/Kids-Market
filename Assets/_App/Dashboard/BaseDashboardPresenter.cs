@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using _App.ChildDashboard;
-using _App.Models;
 using _App.Services;
 using _App.Services.BalanceService;
 using UnityEngine;
@@ -28,10 +27,14 @@ namespace _App.Dashboard
 
         public string AdminUID => _adminUID;
         public ChildModel CurrentChild => _currentChild;
+        public ChildModel GetCurrentChild() => _currentChild;
+
         public DateTime SelectedDay => _selectedDay;
         public List<ChildModel> GetAllChildren() => _children;
         
         private readonly Dictionary<string, float> _temporarilyHiddenParents = new(); // parentId → hideUntilTime
+        
+        public event Action OnChildInitialized;
 
         public BaseDashboardPresenter(
             IDashboardView view,
@@ -65,6 +68,9 @@ namespace _App.Dashboard
             _view.ShowChildBalance(child.Balance);
             _view.CloseProfileSelector();
             //_view.ShowBalanceHistory(child.BalanceHistory ?? new List<BalanceHistoryRecord>());
+            
+            ShowExtraRewardProgressUI();
+            OnChildInitialized?.Invoke();
         }
         
         public void TemporarilyHideParentContract(string parentId, float seconds)
@@ -108,6 +114,15 @@ namespace _App.Dashboard
                 }
 
                 contract.LoadStateHistory();
+                
+                //if(contract.RepeatMode == RepeatType.AsNeeded)
+                    //Debug.Log($"🔍 Contract: {contract.Id} | IsCopy: {contract.IsCopy} | AssignedToUid: {contract.AssignedToUid} | RepeatMode: {contract.RepeatMode}");
+
+                if (contract.AssignedToUid != _currentChild.Uid)
+                {
+                    Debug.Log($"⛔ Skipping {contract.Id} due to UID mismatch: {contract.AssignedToUid} vs {_currentChild.Uid}");
+                    continue;
+                }
 
                 if (selectedDay < today && !contract.IsCopy &&
                     contract.RepeatMode is RepeatType.Once or RepeatType.AsNeeded)
@@ -189,100 +204,6 @@ namespace _App.Dashboard
             });
         }
         
-        protected void UndoPurchaseContract(string contractId, DateTime selectedDay)
-        {
-            if (selectedDay == default)
-            {
-                Debug.LogWarning("❌ No selected day provided.");
-                return;
-            }
-
-            _contractService.GetContractById(contractId, contract =>
-            {
-                if (contract == null)
-                {
-                    Debug.LogWarning($"❌ Contract not found: {contractId}");
-                    return;
-                }
-
-                if (!contract.HasStateOnDate(selectedDay, SmartContractState.Purchased))
-                {
-                    Debug.Log($"ℹ️ Contract was not purchased on {selectedDay:yyyy-MM-dd}");
-                    return;
-                }
-
-                _contractService.SetContractStateOnDate(contract.Id, selectedDay, SmartContractState.ReadyToBuy, success =>
-                {
-                    if (!success)
-                    {
-                        Debug.LogWarning($"❌ Failed to undo purchase for contract: {contract.Title}");
-                        return;
-                    }
-
-                    _balanceService.AdjustBalance(
-                        _currentChild.Uid,
-                        contract.RewardAmount,
-                        $"↩️ Undo purchase of '{contract.Title}'",
-                        recordHistory: false
-                    );
-
-                    _view.UpdateReports(_currentChild, _allContracts);
-
-                    Debug.Log($"↩️ Purchase undone: {contract.Title} | Amount restored: +{contract.RewardAmount}");
-                });
-            });
-        }
-
-
-        
-        /*protected void BuyContract(string contractId)
-        {
-            if (_selectedDay == default)
-            {
-                Debug.LogWarning("❌ No selected day selected.");
-                return;
-            }
-
-            _contractService.GetContractById(contractId, contract =>
-            {
-                if (contract == null)
-                {
-                    Debug.LogWarning($"❌ Contract not found: {contractId}");
-                    return;
-                }
-
-                if (contract.IsCopy)
-                {
-                    Debug.LogWarning($"🚫 Cannot buy a copy contract: {contract.Title}");
-                    return;
-                }
-
-                if (!contract.HasStateOnDate(_selectedDay, SmartContractState.ReadyToBuy))
-                {
-                    Debug.Log($"ℹ️ Contract is not ReadyToBuy on {_selectedDay:yyyy-MM-dd}");
-                    return;
-                }
-
-                _contractService.SetContractStateOnDate(contract.Id, _selectedDay, SmartContractState.Purchased, success =>
-                {
-                    if (!success)
-                    {
-                        Debug.LogWarning($"❌ Failed to set state to Purchased for contract: {contract.Title}");
-                        return;
-                    }
-
-                    _balanceService.AdjustBalance(
-                        _currentChild.Uid,
-                        -contract.RewardAmount,
-                        $"Contract '{contract.Title}' purchased",
-                        recordHistory: false
-                    );
-
-                    Debug.Log($"✅ Contract purchased: {contract.Title} | Amount: -{contract.RewardAmount}");
-                });
-            });
-        }*/
-
         protected int GetNextAsNeededQueueIndex(SmartContractModel parentContract, DateTime date)
         {
             string prefix = date.ToString("yyyy-MM-dd#");
@@ -344,15 +265,23 @@ namespace _App.Dashboard
                 }
             });
         }
+        
+        //----------------------------------------------------------------------
 
         public virtual void PayoutExtraReward()
         {
             if (_currentChild == null) return;
 
-            _rewardService.PayoutReward(_currentChild.Uid, reward =>
+            _rewardService.LoadReward(_currentChild.Uid, reward =>
             {
-                if (reward != null)
-                    _view.ShowRewardPayout(reward);
+                if (reward == null || reward.IsClaimed)
+                    return;
+
+                _rewardService.PayoutReward(_currentChild.Uid, reward, success =>
+                {
+                    if (success)
+                        _view.ShowRewardPayout(reward);
+                });
             });
         }
 
@@ -360,12 +289,72 @@ namespace _App.Dashboard
         {
             if (_currentChild == null) return;
 
-            var weekStart = _dateService.GetWeekStart(_selectedDay);
-            _rewardService.CheckExtraRewardEligibility(_currentChild.Uid, weekStart, eligible =>
+            _rewardService.LoadReward(_currentChild.Uid, reward =>
             {
-                _view.ShowExtraRewardEligible(eligible);
+                if (reward == null || reward.IsClaimed)
+                {
+                    _view.ShowExtraRewardEligible(false);
+                    return;
+                }
+
+                _rewardService.CheckExtraRewardEligibility(_currentChild.Uid, reward, eligible =>
+                {
+                    _view.ShowExtraRewardEligible(eligible);
+                });
             });
         }
+        
+        public virtual void ShowExtraRewardProgressUI()
+        {
+            if (_currentChild == null) return;
+
+            _rewardService.LoadReward(_currentChild.Uid, reward =>
+            {
+                RewardType type = reward.Type;
+                if (reward?.SelectedDays == null || reward.SelectedDays.Count == 0)
+                {
+                    _view.ShowExtraRewardTitle("No Extra Reward");
+                    _view.ShowExtraRewardProgress(0, 0, type);
+                    return;
+                }
+
+                _view.ShowExtraRewardTitle(reward.RewardTitle);
+
+                int fulfilled = 0;
+
+                var weekStart = _dateService.GetWeekStart(DateTime.Today);
+
+                foreach (var dayOfWeek in reward.SelectedDays)
+                {
+                    var offset = ((int)dayOfWeek - (int)weekStart.DayOfWeek + 7) % 7;
+                    var date = weekStart.AddDays(offset);
+
+                    var contracts = _allContracts
+                        .Where(c => c.AssignedToUid == _currentChild.Uid)
+                        .Where(c => !c.IsCopy)
+                        .Where(c => c.RepeatMode == RepeatType.EveryDay || c.RepeatMode == RepeatType.SpecificDays)
+                        .Where(c => c.IsVisibleOn(date))
+                        .ToList();
+
+                    bool allComplete = contracts.Count > 0 && contracts.All(c =>
+                        c.HasStateOnDate(date, SmartContractState.Completed) ||
+                        c.HasStateOnDate(date, SmartContractState.Purchased));
+
+                    if (allComplete)
+                        fulfilled++;
+                }
+                
+                _view.ShowExtraRewardProgress(fulfilled, reward.SelectedDays.Count, type);
+            });
+        }
+
+        public DateTime GetClosestDateForWeekday(DayOfWeek day)
+        {
+            var today = DateTime.Today;
+            int daysUntilTarget = ((int)day - (int)today.DayOfWeek + 7) % 7;
+            return today.AddDays(daysUntilTarget);
+        }
+
 
         public virtual void OnExitSelectProfileButtonPressed() => _view.CloseProfileSelector();
         public virtual void OnSelectProfileButtonPressed() => _view.OpenProfileSelector();

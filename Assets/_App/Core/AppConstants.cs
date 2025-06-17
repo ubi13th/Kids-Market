@@ -33,6 +33,7 @@ public static class AppConstants
     public const string Status = "Status";
     public const string Confirmed = "Confirmed";
     public const string Contracts = "Contracts";
+    public const string SurpriseContract = "SurpriseContract";
     public const string DefaultContractIcon = "ContractIconDefault";
     public const string Presets = "Presets";
     public const string Title = "Title";

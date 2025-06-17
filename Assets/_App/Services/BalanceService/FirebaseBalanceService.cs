@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using _App.Bootstrap;
 using Firebase.Database;
 using Firebase.Extensions;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace _App.Services.BalanceService
@@ -123,9 +124,13 @@ namespace _App.Services.BalanceService
                 Reason = reason,
                 Timestamp = DateTime.UtcNow.ToString("s")
             };
-
+            
+            var json = JsonConvert.SerializeObject(entry);
             var newEntryRef = historyRef.Push();
-            newEntryRef.SetRawJsonValueAsync(JsonUtility.ToJson(entry));
+            newEntryRef.SetRawJsonValueAsync(json);
+
+            //var newEntryRef = historyRef.Push();
+            //newEntryRef.SetRawJsonValueAsync(JsonUtility.ToJson(entry));
 
             // Step 2: Clean up if there are more than 100 entries
             historyRef.GetValueAsync().ContinueWithOnMainThread(task =>

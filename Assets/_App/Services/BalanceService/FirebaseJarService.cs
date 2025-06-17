@@ -4,6 +4,7 @@ using _App.Bootstrap;
 using _App.Models;
 using Firebase.Database;
 using Firebase.Extensions;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace _App.Services.BalanceService
@@ -67,8 +68,10 @@ namespace _App.Services.BalanceService
 
                 foreach (var jarSnapshot in task.Result.Children)
                 {
+                    //var json = jarSnapshot.GetRawJsonValue();
+                    //var jar = JsonUtility.FromJson<SavingJarModel>(json);
                     var json = jarSnapshot.GetRawJsonValue();
-                    var jar = JsonUtility.FromJson<SavingJarModel>(json);
+                    var jar = JsonConvert.DeserializeObject<SavingJarModel>(json);
                     jar.Id = jarSnapshot.Key; // ✅ Set ID from Firebase key
                     result.Add(jar);
                 }
@@ -94,8 +97,10 @@ namespace _App.Services.BalanceService
                 // Preserve existing history if jar exists
                 if (fetchTask.IsCompletedSuccessfully && fetchTask.Result.Exists)
                 {
+                    //var existingJson = fetchTask.Result.GetRawJsonValue();
+                    //var existingJar = JsonUtility.FromJson<SavingJarModel>(existingJson);
                     var existingJson = fetchTask.Result.GetRawJsonValue();
-                    var existingJar = JsonUtility.FromJson<SavingJarModel>(existingJson);
+                    var existingJar = JsonConvert.DeserializeObject<SavingJarModel>(existingJson);
 
                     // Preserve or merge history
                     jar.History = existingJar.History ?? jar.History;
@@ -159,7 +164,9 @@ namespace _App.Services.BalanceService
                     return;
                 }
 
-                var jar = JsonUtility.FromJson<SavingJarModel>(task.Result.GetRawJsonValue());
+                // var jar = JsonUtility.FromJson<SavingJarModel>(task.Result.GetRawJsonValue());
+                // jar.SavedAmount = (float)Math.Round(jar.SavedAmount + amount, 2);
+                var jar = JsonConvert.DeserializeObject<SavingJarModel>(task.Result.GetRawJsonValue());
                 jar.SavedAmount = (float)Math.Round(jar.SavedAmount + amount, 2);
 
                 // 🧾 Optional: Record history if requested
@@ -178,7 +185,9 @@ namespace _App.Services.BalanceService
                         jar.History.RemoveRange(0, jar.History.Count - 100);
                 }
 
-                jarRef.SetRawJsonValueAsync(JsonUtility.ToJson(jar)).ContinueWithOnMainThread(setTask =>
+                string updatedJson = JsonConvert.SerializeObject(jar);
+
+                jarRef.SetRawJsonValueAsync(updatedJson).ContinueWithOnMainThread(setTask =>
                 {
                     if (setTask.IsCompletedSuccessfully)
                         Debug.Log($"✅ Jar updated: {jar.Name} | Δ {amount} | Reason: {reason}");
@@ -188,6 +197,22 @@ namespace _App.Services.BalanceService
                     onComplete?.Invoke(setTask.IsCompletedSuccessfully);
                 });
             });
+        }
+        
+        public void ListenToJars(string childUid, Action<List<SavingJarModel>> onChanged)
+        {
+            GetJarRef(childUid).ValueChanged += (sender, args) =>
+            {
+                var jars = new List<SavingJarModel>();
+                foreach (var snap in args.Snapshot.Children)
+                {
+                    var jar = JsonConvert.DeserializeObject<SavingJarModel>(snap.GetRawJsonValue());
+                    jar.Id = snap.Key;
+                    jars.Add(jar);
+                }
+
+                onChanged?.Invoke(jars);
+            };
         }
     }
 }

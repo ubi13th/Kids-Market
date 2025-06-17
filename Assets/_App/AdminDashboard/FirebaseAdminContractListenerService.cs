@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using _App.Bootstrap;
 using _App.Services;
 using Firebase.Database;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace _App.AdminDashboard
@@ -48,9 +49,7 @@ namespace _App.AdminDashboard
                 foreach (var snapshot in args.Snapshot.Children)
                 {
                     var json = snapshot.GetRawJsonValue();
-                    //Debug.Log($"📄 Raw snapshot JSON: {json}");
-
-                    var contract = JsonUtility.FromJson<SmartContractModel>(json);
+                    var contract = JsonConvert.DeserializeObject<SmartContractModel>(json);
                     if (contract != null)
                     {
                         contract.Id = snapshot.Key;

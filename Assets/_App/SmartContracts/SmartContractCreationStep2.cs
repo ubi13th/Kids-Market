@@ -8,7 +8,6 @@ using System.Globalization;
 using System.Linq;
 using _App.AdminDashboard;
 using _App.Bootstrap;
-using _App.Models;
 using _App.Services;
 using Firebase.Extensions;
 
@@ -80,7 +79,9 @@ public class SmartContractCreationStep2 : MonoBehaviour
     [SerializeField] private GameObject startDateBlock;
     [SerializeField] private GameObject calendarPanel;
     [SerializeField] private GameObject repeatDropdownBlock;
+    [SerializeField] private GameObject dueTimeSetter;
     [SerializeField] private GameObject dueTimeSelectorPanel;
+    [SerializeField] private GameObject presetBlock;
     [SerializeField] private GameObject iconNamePanel;
     [SerializeField] private GameObject contractCreatorPanel;
     [SerializeField] private GameObject rewardBlock;
@@ -150,10 +151,12 @@ public class SmartContractCreationStep2 : MonoBehaviour
         parentalApprovalToggle.onValueChanged.RemoveAllListeners();
         notifyOnThisDeviceToggle.onValueChanged.RemoveAllListeners();
         saveAsPresetToggle.onValueChanged.RemoveAllListeners();
+        
+        contractTitleText.onValueChanged.RemoveAllListeners();
 
         rewardInputField.onValueChanged.RemoveAllListeners();
         repeatDropdown.onValueChanged.RemoveAllListeners();
-        rewardInputField.onValidateInput -= ValidateRewardInput;
+        //rewardInputField.onValidateInput -= ValidateRewardInput;
     }
 
     public void Initialize(IAdminDashboardPresenter presenter)
@@ -202,17 +205,37 @@ public class SmartContractCreationStep2 : MonoBehaviour
         notifyOnThisDeviceToggle.onValueChanged.AddListener(OnNotifyMeOnThisDeviceToggleChanged);
         saveAsPresetToggle.onValueChanged.AddListener(OnSaveAsPresetToggleChanged);
         
-        rewardInputField.onValidateInput += ValidateRewardInput;
+        //rewardInputField.onValidateInput += ValidateRewardInput;
+        rewardInputField.onSelect.AddListener(OnSelectRewardInput);
         rewardInputField.onValueChanged.AddListener(OnRewardInputChanged);
+        rewardInputField.onEndEdit.AddListener(OnRewardInputEndEdit);
         
         LoadChildRewardConfig(SmartContractDraft.AssignedToUid);
 
         icon.sprite = ContractIconLoader.Load(SmartContractDraft.IconPath);
+        
         contractTitleText.text = SmartContractDraft.Title;
         
-        saveButton.interactable = !string.IsNullOrWhiteSpace(contractTitleText.text);
-        contractTitleText.onValueChanged.AddListener(text => 
-            saveButton.interactable = !string.IsNullOrWhiteSpace(text));
+        contractTitleText.onValueChanged.AddListener(OnTitleChanged);
+        contractTitleText.onSelect.AddListener(_ => ActivateCaret(contractTitleText));
+
+        // Ensure initial state
+        OnTitleChanged(contractTitleText.text);
+
+        void OnTitleChanged(string text)
+        {
+            saveButton.interactable = !string.IsNullOrWhiteSpace(text);
+        }
+
+        void ActivateCaret(TMP_InputField field)
+        {
+            field.ActivateInputField();
+            field.caretPosition = field.text.Length;
+        }
+        
+        // contractTitleText.onValueChanged.AddListener(text => 
+        //     saveButton.interactable = !string.IsNullOrWhiteSpace(text));
+        // saveButton.interactable = !string.IsNullOrWhiteSpace(contractTitleText.text);
         
         _rewardAmount = SmartContractDraft.RewardAmount;
         UpdateRewardDisplay();
@@ -266,8 +289,19 @@ public class SmartContractCreationStep2 : MonoBehaviour
         }
         
         repeatDropdown.onValueChanged.AddListener(OnRepeatModeValueChanged);
+        
+        startDateButton.gameObject.SetActive(!SmartContractDraft.IsSurprise);
+        repeatDropdownBlock.SetActive(!SmartContractDraft.IsSurprise);
+        dueTimeSetter.SetActive(!SmartContractDraft.IsSurprise);
+        presetBlock.SetActive(!SmartContractDraft.IsSurprise);
 
         scrollbar.value = 1;
+    }
+    
+    private void OnSelectRewardInput(string _)
+    {
+        rewardInputField.ActivateInputField();
+        rewardInputField.caretPosition = rewardInputField.text.Length;
     }
 
     private void OpenContractIconPicker()
@@ -394,21 +428,24 @@ public class SmartContractCreationStep2 : MonoBehaviour
         UpdateRewardDisplay();
     }
     
+    // Called every time user types — don't format here
     private void OnRewardInputChanged(string input)
     {
-        if (!float.TryParse(input, out float parsedValue)) return;
-
-        float step = _currentRewardType == RewardType.Money ? 0.25f : 1f;
-        parsedValue = Mathf.Round(parsedValue / step) * step;
-        parsedValue = (float)Math.Round(parsedValue, 2); // ✅ Force two decimal places
-
-        _rewardAmount = Mathf.Max(0, parsedValue);
-        UpdateRewardDisplay();
+        if (float.TryParse(input, out float parsedValue))
+        {
+            _rewardAmount = Mathf.Max(0, parsedValue);
+            SmartContractDraft.RewardAmount = _rewardAmount;
+        }
     }
-    
-    private char ValidateRewardInput(string text, int charIndex, char addedChar)
+
+    private void OnRewardInputEndEdit(string input)
     {
-        return char.IsDigit(addedChar) || (_currentRewardType == RewardType.Money && addedChar == '.' && !text.Contains(".")) ? addedChar : '\0';
+        float step = _currentRewardType == RewardType.Money ? 0.25f : 1f;
+        float parsedValue = Mathf.Round(_rewardAmount / step) * step;
+        parsedValue = (float)Math.Round(parsedValue, 2);
+
+        _rewardAmount = parsedValue;
+        UpdateRewardDisplay();
     }
 
     private void UpdateRewardDisplay()
@@ -900,6 +937,7 @@ public class SmartContractCreationStep2 : MonoBehaviour
 
         var contract = new SmartContractModel
         {
+            IsSurprise = SmartContractDraft.IsSurprise,
             Title = SmartContractDraft.Title,
             IconPath = SmartContractDraft.IconPath,
             RewardAmount = SmartContractDraft.RewardAmount,
@@ -929,114 +967,6 @@ public class SmartContractCreationStep2 : MonoBehaviour
 
         return contract;
     }
-    
-    
-    /*private void SaveContract()
-    {
-        if (_rewardAmount <= 0f)
-        {
-            Debug.LogWarning("⚠️ Reward must be greater than 0.");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(contractTitleText.text))
-        {
-            Debug.LogWarning("⚠️ Contract title is required.");
-            return;
-        }
-
-        SmartContractDraft.Title = contractTitleText.text;
-        SmartContractDraft.SetStartDate(SmartContractDraft.StartDate.Date);
-
-        if (dueTimeToggle.isOn)
-            SaveDueTime();
-
-        string originalId = SmartContractDraft.Id;
-        string originalAssignedUid = SmartContractDraft.AssignedToUid;
-
-        var selectedKids = _assignedChildrenList
-            .Where(kv => kv.Value)
-            .Select(kv => kv.Key)
-            .ToList();
-
-        // If none selected, fallback to the originally assigned
-        if (selectedKids.Count == 0 && !string.IsNullOrEmpty(originalAssignedUid))
-            selectedKids.Add(originalAssignedUid);
-
-        foreach (var childUid in selectedKids)
-        {
-            // In edit mode, skip unintended children
-            if (!step1.isCreatingNewContract && childUid != originalAssignedUid)
-                continue;
-            
-            SmartContractModel existing = _visibleContracts.FirstOrDefault(c => c.AssignedToUid == childUid);
-
-            var contract = BuildContract(childUid, existing);
-
-            if (step1.isCreatingNewContract)
-                contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
-
-            // var contract = BuildContract(childUid, originalAssignedUid, originalId);
-            //
-            // // ✅ Preserve history if editing existing contract
-            // if (!step1.isCreatingNewContract && step1.existingContract != null)
-            // {
-            //     contract.stateHistoryRaw = step1.existingContract.stateHistoryRaw;
-            //     contract.LoadStateHistory(); // ensures the dictionary is populated
-            // }
-            //
-            // if (step1.isCreatingNewContract)
-            //     contract.SetStateOnDate(SmartContractDraft.StartDate, SmartContractState.ReadyToSell);
-            
-            _presenter.SaveContract(contract);
-        }
-
-        if (saveAsPresetToggle != null && saveAsPresetToggle.isOn)
-            SavePreset();
-
-        Debug.Log($"✅ Contract(s) saved for {selectedKids.Count} child(ren): {SmartContractDraft.Title}");
-
-        SmartContractDraft.Reset();
-        gameObject.SetActive(false);
-        contractCreatorPanel.SetActive(false);
-    }*/
-
-    /*private SmartContractModel BuildContract(string childUid, string originalAssignedUid, string originalId)
-    {
-        var mode = SmartContractDraft.RepeatMode;
-
-        var repeatDays = SmartContractDraft.RepeatDaysPerChild.TryGetValue(childUid, out var value)
-            ? value
-            : SmartContractDraft.RepeatDaysPerChild.Values.FirstOrDefault() ?? new List<DayOfWeek>();
-        
-        string dueTimeStr;
-        try
-        {
-            dueTimeStr = SmartContractDraft.DueTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
-        }
-        catch (FormatException e)
-        {
-            Debug.LogWarning($"⚠️ Invalid due time format: {e.Message}. Defaulting to 00:00");
-            dueTimeStr = "00:00";
-        }
-
-        return new SmartContractModel
-        {
-            Title = SmartContractDraft.Title,
-            IconPath = SmartContractDraft.IconPath,
-            RewardAmount = SmartContractDraft.RewardAmount,
-            RequirePhotoProof = SmartContractDraft.RequiresPhotoProof,
-            RequireParentalApproval = SmartContractDraft.RequiresParentalApproval,
-            RequireNotificationOnThisDevice = SmartContractDraft.RequireNotificationOnThisDevice,
-            RepeatMode = mode,
-            RepeatDays = repeatDays,
-            StartDate = SmartContractDraft.StartDate.ToString("yyyy-MM-dd"),
-            DueTime = dueTimeStr,
-            AssignedToUid = childUid,
-            AdminUID = _presenter.AdminUID,
-            Id = (childUid == originalAssignedUid && !string.IsNullOrEmpty(originalId)) ? originalId : null
-        };
-    }*/
 
     private void SavePreset()
     {

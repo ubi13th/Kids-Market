@@ -72,10 +72,25 @@ namespace _App.Balance
             plusGoalAmountButton.onClick.AddListener(() => AdjustGoalAmount(+1));
             minusGoalAmountButton.onClick.AddListener(() => AdjustGoalAmount(-1));
             
-            goalAmountInput.onValidateInput += ValidateGoalAmountInput;
+
             goalAmountInput.onValueChanged.AddListener(OnGoalAmountInputChanged);
+            step1NameInput.onSelect.AddListener(_ => ActivateCaret(step1NameInput));
+            step2NameInput.onSelect.AddListener(_ => ActivateCaret(step2NameInput));
+            goalAmountInput.onSelect.AddListener(_ => ActivateCaret(goalAmountInput));
+            
+            step1NameInput.Select();
+            step1NameInput.ActivateInputField();
+            
+            step2NameInput.Select();
+            step2NameInput.ActivateInputField();
             
             _jarService = new FirebaseJarService();
+        }
+        
+        private void ActivateCaret(TMP_InputField input)
+        {
+            input.ActivateInputField();
+            input.caretPosition = input.text.Length;
         }
         
         public void OpenEditJar(SavingJarModel jar, string childUid, Action<SavingJarModel> onUpdated)
@@ -226,11 +241,6 @@ namespace _App.Balance
             parsedValue = (float)Math.Round(parsedValue, 2);
 
             SetGoalAmount(parsedValue);
-        }
-    
-        private char ValidateGoalAmountInput(string text, int charIndex, char addedChar)
-        {
-            return char.IsDigit(addedChar) || (_currentRewardType == RewardType.Money && addedChar == '.' && !text.Contains(".")) ? addedChar : '\0';
         }
 
         private void UpdateGoalAmountDisplay()

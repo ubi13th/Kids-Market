@@ -24,10 +24,19 @@ namespace _App.Dashboard
 
         void OnChildSurpriseButtonPressed();
         
+        void SaveContract(SmartContractModel contract);
+        void EditContract(string contractId);
+        void DeleteContract(string contractId);
+        event Action OnChildInitialized;
+        
         void PayoutExtraReward();
 
         void CleanupContractListenerService();
         void CleanupChildListenerService();
         int GetLastQueueIndexForDay(SmartContractModel contract, DateTime selectedDay);
+        
+        void OnRewardButtonPressed();
+        void OpenExtraRewardCreator();
+        void ClaimExtraReward();
     }
 }
