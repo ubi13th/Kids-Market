@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using _App.Dashboard;
-using _App.Models;
 
 namespace _App.AdminDashboard
 {
@@ -10,6 +9,8 @@ namespace _App.AdminDashboard
         string AdminUID { get; }
         
         List<ChildModel> GetAllChildren();
+        
+        List<UserModel> GetAllAdmins();
 
         //void SaveContract(SmartContractModel contract);
         //void EditContract(string contractId);

@@ -4,6 +4,8 @@ using _App.Bootstrap;
 using UnityEngine;
 using TMPro;
 using Firebase.Auth;
+using UnityEngine.Serialization;
+using UnityEngine.UI;
 
 public class AdminAuthHandler : MonoBehaviour
 {
@@ -14,8 +16,37 @@ public class AdminAuthHandler : MonoBehaviour
     [SerializeField] private GameObject adminSignUpPanel;
     [SerializeField] private GameObject childJoinPanel;
     [SerializeField] private GameObject adminProfileSetupPanel;
+    [SerializeField] private GameObject adminOptionsPanel;
+    [SerializeField] private GameObject joinHouseholdPanel;
+    [SerializeField] private Button joinHouseholdButton;
+    [SerializeField] private Button newHouseholdButton;
+    [SerializeField] private Button backJoinHouseholdButton;
+    [SerializeField] private Button backAdminSignUpPanelButton;
+    [SerializeField] private Button backAdminNameAndSignUpPanelButton;
+    [SerializeField] private Button backAdminSignUpOptionsPanelButton;
 
     private string _newlySignedUpUserId;
+
+    private void Start()
+    {
+        joinHouseholdButton.onClick.RemoveAllListeners();
+        joinHouseholdButton.onClick.AddListener(ShowJoinHouseholdPanel);
+        
+        newHouseholdButton.onClick.RemoveAllListeners();
+        newHouseholdButton.onClick.AddListener(ShowAdminSignUpPanel);
+        
+        backJoinHouseholdButton.onClick.RemoveAllListeners();
+        backJoinHouseholdButton.onClick.AddListener(HideJoinHouseholdPanel);
+        
+        backAdminSignUpPanelButton.onClick.RemoveAllListeners();
+        backAdminSignUpPanelButton.onClick.AddListener(HideAdminSignUpPanel);
+        
+        backAdminNameAndSignUpPanelButton.onClick.RemoveAllListeners();
+        backAdminNameAndSignUpPanelButton.onClick.AddListener(HideAdminProfileSetupPanel);
+        
+        backAdminSignUpOptionsPanelButton.onClick.RemoveAllListeners();
+        backAdminSignUpOptionsPanelButton.onClick.AddListener(HideAdminSignUpOptionsPanel);
+    }
 
     public async void OnClickAdminLogIn()
     {
@@ -132,16 +163,32 @@ public class AdminAuthHandler : MonoBehaviour
         }
         else
         {
-            ShowAdminSignUpPanel();
-            signUpStatusText.text = "Please enter your email and create password";
+            ShowAdminSignUpOptionsPanel();
         }
     }
-
-    private void ShowAdminSignUpPanel() =>
+    
+    private void ShowAdminSignUpOptionsPanel() =>
+        adminOptionsPanel.SetActive(true);
+    private void HideAdminSignUpOptionsPanel() =>
+        adminOptionsPanel.SetActive(false);
+    
+    private void ShowJoinHouseholdPanel() =>
+        joinHouseholdPanel.SetActive(true);
+    private void HideJoinHouseholdPanel() =>
+        joinHouseholdPanel.SetActive(false);
+    
+    private void ShowAdminSignUpPanel()
+    {
         adminSignUpPanel.SetActive(true);
+        signUpStatusText.text = "Please enter your email and create password";
+    }
+    private void HideAdminSignUpPanel() => 
+        adminSignUpPanel.SetActive(false);
 
-    private void ShowAdminProfileSetupPanel() =>
+    private void ShowAdminProfileSetupPanel() => 
         adminProfileSetupPanel.SetActive(true);
+    private void HideAdminProfileSetupPanel() => 
+        adminProfileSetupPanel.SetActive(false);
 
     public void QuitApp() =>
         Application.Quit();

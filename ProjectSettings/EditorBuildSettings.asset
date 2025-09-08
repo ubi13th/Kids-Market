@@ -15,5 +15,8 @@ EditorBuildSettings:
     path: Assets/Scenes/DashboardScene.unity
     guid: 8e8289cd3873e6b41a3fa43fb0327938
   m_configObjects:
+    com.unity.adaptiveperformance.google.android.provider_settings: {fileID: 11400000, guid: 37e331def5b9f8848a8abb5f96fde7a2, type: 2}
     com.unity.adaptiveperformance.loader_settings: {fileID: 11400000, guid: d1c0e91bcafb99446a4e028084b16e45, type: 2}
+    com.unity.adaptiveperformance.samsung.android.provider_settings: {fileID: 11400000, guid: 429fd1c0e2cbce740865b51723bd52d0, type: 2}
     com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 532747fedb92f70478ac90356ee5325b, type: 2}
+  m_UseUCBPForAssetBundles: 0

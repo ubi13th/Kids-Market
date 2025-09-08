@@ -36,8 +36,10 @@ namespace _App.Settings
         [SerializeField] private Button moneyButton, pointsButton, noneButton;
         [SerializeField] private TMP_Text joinCodeText;
         [SerializeField] private Button deleteAccountButton;
-        [SerializeField] private Button editNameButton;
+        //[SerializeField] private Button editNameButton;
         [SerializeField] private Image profileIcon;
+        
+        private FamilyModel _familyCache;
         
         private IDashboardPresenter  _presenter;
         private IAdminDashboardPresenter  _adminPresenter;
@@ -56,13 +58,19 @@ namespace _App.Settings
             familyButton.onClick.AddListener(OpenFamilyProfilePanel);
             familyPanelBackButton.onClick.AddListener(CloseFamilyProfilePanel);
             InitializeWeekStartDropdown();
+            
+            //familyButton.gameObject.SetActive(_isAdmin);
+            //weekStartsBlock.SetActive(_isAdmin);
+            
+            familyButton.gameObject.SetActive(true);
+            weekStartsBlock.SetActive(true);
         }
 
-        private void OnEnable()
-        {
-            familyButton.gameObject.SetActive(_isAdmin);
-            weekStartsBlock.SetActive(_isAdmin);
-        }
+        // private void OnEnable()
+        // {
+        //     familyButton.gameObject.SetActive(_isAdmin);
+        //     weekStartsBlock.SetActive(_isAdmin);
+        // }
 
         public void OpenFamilyProfilePanel()
         {
@@ -75,9 +83,11 @@ namespace _App.Settings
         {
             familyCanvas.SetActive(false);
         }
-        
-        public void ShowFamilySetup(FamilyModel family)
+
+        private void ShowFamilySetup(FamilyModel family)
         {
+            _familyCache = family;
+            
             // Clear containers
             foreach (Transform child in adultsContainer)
                 Destroy(child.gameObject);
@@ -88,18 +98,37 @@ namespace _App.Settings
             {
                 var button = Instantiate(profileButtonPrefab, adultsContainer);
                 button.GetComponent<SettingsProfileButton>().Initialize(
-                    adult.Uid, adult.DisplayName, adult.AvatarPath, OnProfileSelected, true);
+                    adult.Uid, adult.DisplayName, adult.AvatarPath, OnAdminProfileSelected, true);
             }
 
             foreach (var kid in family.Kids)
             {
                 var button = Instantiate(profileButtonPrefab, kidsContainer);
                 button.GetComponent<SettingsProfileButton>().Initialize(
-                    kid.Uid, kid.DisplayName, kid.AvatarPath, OnProfileSelected, false);
+                    kid.Uid, kid.DisplayName, kid.AvatarPath, OnChildProfileSelected, false);
             }
         }
         
-        private void OnProfileSelected(string childId)
+        private void OnAdminProfileSelected(string adminId)
+        {
+            var admin = _familyCache?.Adults?.FirstOrDefault(a => a.Uid == adminId)
+                        ?? _adminPresenter?.GetAllAdmins()?.FirstOrDefault(a => a.Uid == adminId);
+
+            if (admin == null)
+            {
+                Debug.LogWarning($"❌ Admin not found: {adminId} " +
+                                 $"(AdultsCache={_familyCache?.Adults?.Count ?? -1}, " +
+                                 $"PresenterAdmins={_adminPresenter?.GetAllAdmins()?.Count ?? -1})");
+                return;
+            }
+
+            CloseFamilyProfilePanel();
+            editProfileCanvas.gameObject.SetActive(true);
+            editProfileCanvas.LoadAdminForEdit(admin);
+            Debug.Log($"Selected profile for editing (admin): {admin.DisplayName}");
+        }
+        
+        private void OnChildProfileSelected(string childId)
         {
             var child = _adminPresenter.GetAllChildren().FirstOrDefault(c => c.Uid == childId);
             if (child == null)

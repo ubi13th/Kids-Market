@@ -2,9 +2,12 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using _App.Bootstrap;
 using _App.ChildDashboard;
 using _App.Services;
 using _App.Services.BalanceService;
+using _App.Services.Notifications;
+using Firebase.Extensions;
 using UnityEngine;
 
 namespace _App.Dashboard
@@ -18,6 +21,8 @@ namespace _App.Dashboard
         protected readonly IAppSettingsService _appSettingsService;
         protected readonly IDateService _dateService;
         protected readonly IBalanceService _balanceService;
+        
+        private readonly INotificationService _notificationService = new CloudFunctionNotificationService();
 
         protected string _adminUID;
         protected ChildModel _currentChild;
@@ -154,6 +159,20 @@ namespace _App.Dashboard
             _view.ShowGroupedContracts(grouped);
         }
         
+        // who should receive the push?
+        static string ResolveTargetUid(string actorRole, ChildModel child)
+        {
+            // child performs action -> notify parent/admin
+            if (string.Equals(actorRole, "child", StringComparison.OrdinalIgnoreCase))
+                return child.AdminUID;   // <- vroe5Wj...
+
+            // admin performs action -> notify the child
+            if (string.Equals(actorRole, "admin", StringComparison.OrdinalIgnoreCase))
+                return child.Uid;
+
+            return child.AdminUID; // sensible default
+        }
+        
         protected void BuyContract(string contractId, DateTime selectedDay)
         {
             if (selectedDay == default)
@@ -199,7 +218,19 @@ namespace _App.Dashboard
 
                     _view.UpdateReports(_currentChild, _allContracts);
 
-                    Debug.Log($"✅ Contract purchased: {contract.Title} | Amount: -{contract.RewardAmount}");
+                    Debug.Log($"✅ Contract purchased: {_currentChild.Uid} | {contract.Title} | Amount: -{contract.RewardAmount}");
+                    
+                    var actorUid  = _currentChild.Uid;     // who did the action
+                    var actorRole = "child";
+                    var targetUid = ResolveTargetUid(actorRole, _currentChild);
+
+                    _notificationService.Notify(
+                        targetUid,
+                        NotificationEventType.ContractPurchasedByChild,
+                        contract,
+                        actorUid,
+                        actorRole
+                    );
                 });
             });
         }
@@ -354,8 +385,20 @@ namespace _App.Dashboard
             int daysUntilTarget = ((int)day - (int)today.DayOfWeek + 7) % 7;
             return today.AddDays(daysUntilTarget);
         }
+        
+        public void SaveAdminProfile(AdminModel admin, Action<bool> cb)
+        {
+            var data = new Dictionary<string, object> {
+                [AppConstants.DisplayName] = admin.DisplayName,
+                [AppConstants.AvatarPath]  = admin.AvatarPath,
+                [AppConstants.JoinCode]    = admin.JoinCode
+            };
 
-
+            FirebaseInit.DbRef.Child(AppConstants.Admins).Child(admin.Uid)
+                .UpdateChildrenAsync(data)
+                .ContinueWithOnMainThread(t => cb(t.IsCompleted && !t.IsFaulted && !t.IsCanceled));
+        }
+        
         public virtual void OnExitSelectProfileButtonPressed() => _view.CloseProfileSelector();
         public virtual void OnSelectProfileButtonPressed() => _view.OpenProfileSelector();
     }

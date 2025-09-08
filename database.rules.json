@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "DeviceTokens": {
+      "$uid": {
+        ".read": false,
+        "$token": {
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    }
+  }
+}

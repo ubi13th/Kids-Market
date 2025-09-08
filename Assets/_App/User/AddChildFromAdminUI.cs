@@ -196,54 +196,6 @@ public class AddChildFromAdminUI : MonoBehaviour
         });
     }
 
-
-    /*private void SaveNewChild()
-    {
-        string childName = nameInput.text.Trim();
-        if (string.IsNullOrEmpty(childName))
-        {
-            statusText.text = "❌ Name is required.";
-            return;
-        }
-
-        string newChildUID = Guid.NewGuid().ToString();
-        string adminUID = FirebaseInit.Auth.CurrentUser?.UserId;
-
-        if (string.IsNullOrEmpty(adminUID))
-        {
-            statusText.text = "❌ Admin not signed in.";
-            return;
-        }
-
-        string joinCode = GenerateJoinCode();
-
-        ChildModel newChild = new ChildModel
-        {
-            Uid = newChildUID,
-            DisplayName = childName,
-            AvatarPath = _avatarPath,
-            AdminUID = adminUID,
-            RewardPreference = _selectedRewardType,
-            JoinCode = joinCode,
-            Balance = 0
-        };
-        
-        _adminPresenter?.SetPendingNewChild(newChildUID); // ✅ Tell presenter which child to select
-        
-        _childService.AddNewChild(newChild, success =>
-        {
-            if (success)
-            {
-                Saving(childName, joinCode);
-            }
-            else
-            {
-                Debug.LogError("❌ Failed to save child.");
-                statusText.text = "❌ Failed to create user.";
-            }
-        });
-    }*/
-
     private void Saving(string childName, string joinCode)
     {
         joinCodeText.text = $"{joinCode}";

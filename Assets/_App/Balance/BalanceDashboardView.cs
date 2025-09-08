@@ -54,12 +54,12 @@ namespace _App.Balance
         private float _childBalance;
         private float _debitCreditAmount;
         private bool _isDebit;
+
         private RewardType _currentRewardType;
-        
         private IDashboardPresenter  _presenter;
         private IAdminDashboardPresenter  _adminPresenter;
         
-        public event Action OnChildInitialized;
+        //public event Action OnChildInitialized;
 
         private FirebaseJarService _jarService;
 
@@ -119,34 +119,13 @@ namespace _App.Balance
             {
                 if (jars == null || jars.Count == 0)
                     return;
-
-                _goalAmount = jars[0].GoalAmount;
-                _currentSavedAmount = jars[0].SavedAmount;
-
-                UpdateJarFill();
-            });
-        }
-
-
-        /*private void GetCurrentJar()
-        {
-            _currentChildUId = _adminPresenter?.CurrentChild?.Uid ?? null;
-            if(_currentChildUId == null)
-                return;
-
-            _jarService.HasAnyJar(_currentChildUId, exists =>
-            {
-                jarIcon.SetActive(exists);
-            });
-            
-            _jarService.GetJars(_currentChildUId, jars =>
-            {
+                
                 _goalAmount = jars[0].GoalAmount;
                 _currentSavedAmount = jars[0].SavedAmount;
                 
                 UpdateJarFill();
             });
-        }*/
+        }
 
         private IEnumerator AnimateJarFill(float targetFill)
         {
@@ -195,18 +174,8 @@ namespace _App.Balance
             plusButton.gameObject.SetActive(_currentRewardType != RewardType.None);
             minusButton.gameObject.SetActive(_currentRewardType != RewardType.None);
             
-            //jarManagerView.Initialize(child.Uid, child); // reload jars
-            //GetCurrentJar();
-            
-            _jarService.ListenToJars(child.Uid, updatedJars =>
-            {
-                //jarManagerView.Render(updatedJars); // or re-Initialize if needed
-                jarManagerView.Initialize(child.Uid, child); // reload jars
-                _goalAmount = updatedJars[0].GoalAmount;
-                _currentSavedAmount = updatedJars[0].SavedAmount;
-                UpdateJarFill();
-            });
-
+            jarManagerView.Initialize(child.Uid, child); // reload jars
+            GetCurrentJar();
         }
 
         private void OnNewJarButtonClicked()

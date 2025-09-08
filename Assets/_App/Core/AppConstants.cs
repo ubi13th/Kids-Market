@@ -16,6 +16,9 @@ public static class AppConstants
     
     public const string DisplayName = "DisplayName";
     public const string Balance = "Balance";
+    public const string Settings = "Settings";
+    public const string WeekStartsOn = "WeekStartsOn";
+    public const string DeviceTokens = "DeviceTokens";
     
     public const string LoginScene = "LoginScene";
     public const string SettingsScene = "SettingsScene";

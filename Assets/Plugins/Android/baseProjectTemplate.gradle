@@ -1,23 +1,41 @@
 plugins {
-    // Be sure Gradle version matches Unity’s supported version
-    id 'com.android.application' version '7.4.2' apply false
-    id 'com.android.library' version '7.4.2' apply false
+    // Keep AGP aligned with Unity’s bundled Gradle (Unity 2023.2 uses Gradle 7.6; AGP 7.3.1 is compatible)
+    id 'com.android.application' version '7.3.1' apply false
+    id 'com.android.library'     version '7.3.1' apply false
     **BUILD_SCRIPT_DEPS**
 }
 
-// 🔥 This is the key part: Make sure to include required repos
-allprojects {
-    repositories {
-        google()            // Required for Firebase
-        mavenCentral()      // For other dependencies
-        jcenter()           // Optional, only if you have legacy libs (deprecated but still useful sometimes)
-        flatDir {
-            dirs 'libs'
+// Optional central place for versions
+ext {
+    unityCompileSdkVersion = 34
+    unityMinSdkVersion     = 23
+}
+
+// Apply to all Android modules (launcher, unityLibrary, etc.)
+subprojects { proj ->
+    afterEvaluate {
+        if (proj.plugins.hasPlugin('com.android.application') || proj.plugins.hasPlugin('com.android.library')) {
+            proj.android {
+                // Let templates set these (Unity will override as needed), but safe to keep:
+                // compileSdkVersion unityCompileSdkVersion
+                // defaultConfig { minSdkVersion unityMinSdkVersion }
+
+                // Fix for: duplicate 'commonMain/default/manifest' during mergeReleaseJavaResource
+                packagingOptions {
+                    resources {
+                        excludes += ["commonMain/**",
+                                     "META-INF/*.kotlin_module",
+                                     "META-INF/AL2.0", "META-INF/LGPL2.1",
+                                     "META-INF/LICENSE*", "META-INF/NOTICE*",
+                                     "DebugProbesKt.bin"]
+                    }
+                }
+            }
         }
     }
 }
 
-task clean(type: Delete) {
+// Gradle 7+ style
+tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
-

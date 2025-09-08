@@ -12,7 +12,7 @@ public class FirebaseSettingsService : IAppSettingsService
     public void SaveWeekStartsOn(DayOfWeek day, string adminUID)
     {
         int value = (int)day;
-        _dbRef.Child("admins").Child(adminUID).Child("settings").Child("WeekStartsOn")
+        _dbRef.Child(AppConstants.Admins).Child(adminUID).Child(AppConstants.Settings).Child(AppConstants.WeekStartsOn)
             .SetValueAsync(value)
             .ContinueWithOnMainThread(task =>
             {
@@ -25,7 +25,7 @@ public class FirebaseSettingsService : IAppSettingsService
 
     public void LoadWeekStartsOn(string adminUID, Action<DayOfWeek> onLoaded)
     {
-        _dbRef.Child("admins").Child(adminUID).Child("settings").Child("WeekStartsOn")
+        _dbRef.Child(AppConstants.Admins).Child(adminUID).Child(AppConstants.Settings).Child(AppConstants.WeekStartsOn)
             .GetValueAsync()
             .ContinueWithOnMainThread(task =>
             {
@@ -49,7 +49,7 @@ public class FirebaseSettingsService : IAppSettingsService
         var dbRef = FirebaseInit.DbRef;
 
         // Step 1: Get admin UID for this child
-        dbRef.Child("children").Child(childUid).Child("adminUid")
+        dbRef.Child(AppConstants.Children).Child(childUid).Child(AppConstants.AdminUID)
             .GetValueAsync()
             .ContinueWithOnMainThread(adminTask =>
             {
@@ -63,7 +63,7 @@ public class FirebaseSettingsService : IAppSettingsService
                 string adminUID = adminTask.Result.Value.ToString();
 
                 // Step 2: Get WeekStartsOn from admin settings
-                dbRef.Child("admins").Child(adminUID).Child("settings").Child("WeekStartsOn")
+                dbRef.Child(AppConstants.Admins).Child(adminUID).Child(AppConstants.Settings).Child(AppConstants.WeekStartsOn)
                     .GetValueAsync()
                     .ContinueWithOnMainThread(weekTask =>
                     {

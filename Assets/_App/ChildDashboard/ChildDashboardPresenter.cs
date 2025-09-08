@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using _App.Bootstrap;
 using _App.Dashboard;
 using _App.Models;
 using _App.Services;
 using _App.Services.BalanceService;
 using UnityEngine;
+using _App.Services.Notifications;
 
 namespace _App.ChildDashboard
 {
@@ -14,6 +16,9 @@ namespace _App.ChildDashboard
         private readonly IChildContractListenerService _contractListenerService;
         private readonly IBalanceListenerService _balanceListenerService;
         private readonly IncomeDistributorService _distributorService = new();
+        
+        // instantiate once (DI or quick field)
+        private readonly INotificationService _notificationService = new CloudFunctionNotificationService();
         
         private ExtraRewardModel _currentExtraReward;
         private RewardType _type;
@@ -93,13 +98,15 @@ namespace _App.ChildDashboard
 
                 // ✅ Update AsNeeded states if needed
                 new DailyContractStateUpdater().Run(childUID, isAdmin: false);
+                
+                TokenOwner.Set(child.Uid);
             });
         }
         
         private void OnContractsChanged(List<SmartContractModel> allContracts)
         {
             _allContracts = allContracts ?? new List<SmartContractModel>();
-            _view.UpdateCalendarColors(_allContracts, _currentChild.Uid);
+            _view.UpdateCalendarColors(_allContracts, _currentChild?.Uid ?? string.Empty);
             FilterAndShowContracts();
             ShowExtraRewardProgressUI();
             CheckExtraRewardEligibility();
@@ -133,23 +140,23 @@ namespace _App.ChildDashboard
             
             //string realId = contractId;
 
-            _contractService.GetContractById(realId, parent =>
+            _contractService.GetContractById(realId, contract =>
             {
-                if (parent == null || parent.IsCopy)
+                if (contract == null || contract.IsCopy)
                 {
                     Debug.LogWarning($"❌ Contract not found or is a copy: {realId}");
                     return;
                 }
 
-                SmartContractState targetState = parent.RequireParentalApproval
+                SmartContractState targetState = contract.RequireParentalApproval
                     ? SmartContractState.ReadyToConfirm
                     : SmartContractState.Completed;
 
                 bool shouldGiveReward = targetState == SmartContractState.Completed;
 
-                if (parent.RepeatMode == RepeatType.AsNeeded)
+                if (contract.RepeatMode == RepeatType.AsNeeded)
                 {
-                    _contractService.GetAsNeededCopyByParentId(parent.Id, copy =>
+                    _contractService.GetAsNeededCopyByParentId(contract.Id, copy =>
                     {
                         SmartContractModel copyToUse;
                         int queueIndex;
@@ -161,7 +168,7 @@ namespace _App.ChildDashboard
                             copy.SetStateOnDateWithQueue(_selectedDay, targetState, queueIndex);
                             copyToUse = copy;
 
-                            TemporarilyHideParentContract(parent.Id, _asNeededReSetDelay);
+                            TemporarilyHideParentContract(contract.Id, _asNeededReSetDelay);
                             FilterAndShowContracts();
 
                             Debug.Log($"➕ Added queue #{queueIndex} to AsNeeded copy: {copy.Id}");
@@ -171,16 +178,16 @@ namespace _App.ChildDashboard
                             copyToUse = new SmartContractModel
                             {
                                 Id = Guid.NewGuid().ToString(),
-                                ParentId = parent.Id,
-                                Title = parent.Title,
-                                IconPath = parent.IconPath ?? "DefaultIcon",
-                                RewardAmount = parent.RewardAmount,
-                                RequirePhotoProof = parent.RequirePhotoProof,
-                                RequireParentalApproval = parent.RequireParentalApproval,
-                                RequireNotificationOnThisDevice = parent.RequireNotificationOnThisDevice,
-                                DueTime = string.IsNullOrWhiteSpace(parent.DueTime) ? "00:00" : parent.DueTime,
-                                AssignedToUid = parent.AssignedToUid,
-                                AdminUID = parent.AdminUID,
+                                ParentId = contract.Id,
+                                Title = contract.Title,
+                                IconPath = contract.IconPath ?? "DefaultIcon",
+                                RewardAmount = contract.RewardAmount,
+                                RequirePhotoProof = contract.RequirePhotoProof,
+                                RequireParentalApproval = contract.RequireParentalApproval,
+                                RequireNotificationOnThisDevice = contract.RequireNotificationOnThisDevice,
+                                DueTime = string.IsNullOrWhiteSpace(contract.DueTime) ? "00:00" : contract.DueTime,
+                                AssignedToUid = contract.AssignedToUid,
+                                AdminUID = contract.AdminUID,
                                 IsCopy = true,
                                 RepeatMode = RepeatType.AsNeeded,
                                 RepeatDays = new List<DayOfWeek>()
@@ -190,26 +197,55 @@ namespace _App.ChildDashboard
                             queueIndex = 0;
                             copyToUse.SetStateOnDateWithQueue(_selectedDay, targetState, queueIndex);
 
-                            TemporarilyHideParentContract(parent.Id, _asNeededReSetDelay);
+                            TemporarilyHideParentContract(contract.Id, _asNeededReSetDelay);
                             FilterAndShowContracts();
 
                             Debug.Log($"🆕 Created new AsNeeded copy: {copyToUse.Id}");
                         }
 
-                        parent.LoadStateHistory(); // state stays untouched
+                        contract.LoadStateHistory(); // state stays untouched
 
                         _contractService.SaveContract(copyToUse, _ =>
                         {
                             if (shouldGiveReward)
                             {
-                                Debug.Log($"✅ Child confirmed AsNeeded contract: {parent.Title} | Queue #{queueIndex} | +{parent.RewardAmount}");
-                                _distributorService.DistributeIncome(_currentChild.Uid, parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                                Debug.Log($"✅ Child confirmed AsNeeded contract: {contract.Title} | Queue #{queueIndex} | +{contract.RewardAmount}");
+                                _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
                                 
                                 //UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                                
+                                var actorUid  = _currentChild.Uid;     // who did the action
+                                var actorRole = "child";
+                                var targetUid = contract.AdminUID;
+                                
+                                Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                                _notificationService.Notify(
+                                    targetUid,
+                                    NotificationEventType.ContractSubmittedByChild,
+                                    contract,
+                                    actorUid,
+                                    actorRole
+                                );
+
                             }
                             else
                             {
-                                Debug.Log($"🕓 Child submitted AsNeeded contract for approval: {parent.Title}");
+                                Debug.Log($"🕓 Child submitted AsNeeded contract for approval: {contract.Title}");
+                                
+                                var actorUid  = _currentChild.Uid;     // who did the action
+                                var actorRole = "child";
+                                var targetUid = contract.AdminUID;
+                                
+                                Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                                _notificationService.Notify(
+                                    targetUid,
+                                    NotificationEventType.ContractSubmittedByChild,
+                                    contract,
+                                    actorUid,
+                                    actorRole
+                                );
                             }
                         });
                     });
@@ -218,20 +254,48 @@ namespace _App.ChildDashboard
                 }
 
                 // 🔁 Flat (non-copy) contract logic
-                _contractService.SetContractStateOnDate(parent.Id, _selectedDay, targetState, success =>
+                _contractService.SetContractStateOnDate(contract.Id, _selectedDay, targetState, success =>
                 {
                     if (success)
                     {
                         if (shouldGiveReward)
                         {
-                            Debug.Log($"✅ Child confirmed flat contract: {parent.Title} | +{parent.RewardAmount}");
-                            _distributorService.DistributeIncome(_currentChild.Uid, parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                            Debug.Log($"✅ Child confirmed flat contract: {contract.Title} | +{contract.RewardAmount}");
+                            _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
 
                             //UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                            
+                            var actorUid  = _currentChild.Uid;     // who did the action
+                            var actorRole = "child";
+                            var targetUid = contract.AdminUID;
+                            
+                            Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                            _notificationService.Notify(
+                                targetUid,
+                                NotificationEventType.ContractSubmittedByChild,
+                                contract,
+                                actorUid,
+                                actorRole
+                            );
                         }
                         else
                         {
-                            Debug.Log($"🕓 Child submitted flat contract for approval: {parent.Title}");
+                            Debug.Log($"🕓 Child submitted flat contract for approval: {contract.Title}");
+                            
+                            var actorUid  = _currentChild.Uid;     // who did the action
+                            var actorRole = "child";
+                            var targetUid = contract.AdminUID;
+                            
+                            Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                            _notificationService.Notify(
+                                targetUid,
+                                NotificationEventType.ContractSubmittedByChild,
+                                contract,
+                                actorUid,
+                                actorRole
+                            );
                         }
                     }
                 });
@@ -312,6 +376,20 @@ namespace _App.ChildDashboard
                                     contract.RewardAmount,
                                     $"Undo confirmation for contract '{contract.Title}'"
                                 );
+                                
+                                var actorUid  = _currentChild.Uid;     // who did the action
+                                var actorRole = "child";
+                                var targetUid = contract.AdminUID;
+                                
+                                Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                                _notificationService.Notify(
+                                    targetUid,
+                                    NotificationEventType.ContractUndoByChild,
+                                    contract,
+                                    actorUid,
+                                    actorRole
+                                );
                             }
                             else if (wasWaitingApproval)
                             {
@@ -352,6 +430,20 @@ namespace _App.ChildDashboard
                             }
 
                             Debug.Log($"↩️ Undo confirmed: {contract.Title} | State: {previousState} → ReadyToSell | Day: {_selectedDay:yyyy-MM-dd}");
+                            
+                            var actorUid  = _currentChild.Uid;     // who did the action
+                            var actorRole = "child";
+                            var targetUid = contract.AdminUID;
+                                
+                            Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                            _notificationService.Notify(
+                                targetUid,
+                                NotificationEventType.ContractUndoByChild,
+                                contract,
+                                actorUid,
+                                actorRole
+                            );
                         }
                     });
                 }
@@ -376,7 +468,7 @@ namespace _App.ChildDashboard
         
         public void UndoPurchaseContract(string contractId, DateTime selectedDay)
         {
-            if (_selectedDay == default)
+            if (selectedDay == default)
             {
                 Debug.LogWarning("❌ Selected day is not set.");
                 return;
@@ -430,6 +522,20 @@ namespace _App.ChildDashboard
                             contract.RewardAmount,
                             $"Undo purchase of contract '{contract.Title}'"
                         );
+                        
+                        var actorUid  = _currentChild.Uid;     // who did the action
+                        var actorRole = "child";
+                        var targetUid = contract.AdminUID;
+                        
+                        Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                        _notificationService.Notify(
+                            targetUid,
+                            NotificationEventType.ContractUndoPurchasedByChild,
+                            contract,
+                            actorUid,
+                            actorRole
+                        );
                     }
                 });
             });
@@ -437,12 +543,32 @@ namespace _App.ChildDashboard
 
         public void SaveContract(SmartContractModel contract)
         {
-            contract.AdminUID = _adminUID;
+            //contract.AdminUID = _adminUID;
+            contract.AdminUID = _currentChild?.AdminUID;
 
             _contractService.SaveContract(contract, success =>
             {
                 if (!success)
+                {
                     Debug.LogWarning("❌ Failed to save contract");
+                    return;
+                }
+                if (contract.IsSurprise)
+                {
+                    var actorUid  = _currentChild.Uid;     // who did the action
+                    var actorRole = "child";
+                    var targetUid = contract.AdminUID;
+                    
+                    Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                    _notificationService.Notify(
+                        targetUid,
+                        NotificationEventType.SurpriseContractCreated,
+                        contract,
+                        actorUid,
+                        actorRole
+                    );
+                }
             });
         }
 
@@ -464,6 +590,23 @@ namespace _App.ChildDashboard
 
                 SmartContractDraft.LoadFromModel(contract);
                 _view.OnChildSurpriseContractEdit(contract); // this triggers InitializeUI(contract)
+                
+                if (contract.IsSurprise)
+                {
+                    var actorUid  = _currentChild.Uid;     // who did the action
+                    var actorRole = "child";
+                    var targetUid = contract.AdminUID;
+                    
+                    Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                    _notificationService.Notify(
+                        targetUid,
+                        NotificationEventType.SurpriseContractUpdated,
+                        contract,
+                        actorUid,
+                        actorRole
+                    );
+                }
             });
         }
         
@@ -569,17 +712,12 @@ namespace _App.ChildDashboard
             int daysBack = ((int)today.DayOfWeek - (int)targetDay + 7) % 7;
             return today.AddDays(-daysBack);
         }
-
         
         public void CleanupContractListenerService()
-        {
-            throw new NotImplementedException();
-        }
+            => _contractListenerService.StopListening();
 
         public void CleanupChildListenerService()
-        {
-            throw new NotImplementedException();
-        }
+            => _childService.StopListening();
         
         public void Cleanup() => _contractListenerService.StopListening();
     }

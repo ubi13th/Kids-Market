@@ -92,6 +92,8 @@ namespace _App.AdminDashboard
         private bool _hasTriggeredRefresh = false;
         private const float PullThreshold = 1.2f; // drag beyond 1 = pull gesture
 
+        public bool isContractsExist = false;
+
         private bool _hasSelectedToday = false;
         private bool _didAutoSelectToday = false;
 
@@ -104,7 +106,7 @@ namespace _App.AdminDashboard
         private readonly List<(Button button, DateTime date)> _calendarButtonData = new();
         private readonly Dictionary<string, GameObject> _childItemMap = new();
         
-        public event Action OnChildInitialized;
+        //public event Action OnChildInitialized;
 
         private bool _isAdmin;
         
@@ -128,6 +130,9 @@ namespace _App.AdminDashboard
         private async void Start()
         {
             await FirebaseInit.WaitUntilReady();
+            
+            if(FirebaseInit.Auth.CurrentUser == null)
+                await UserSession.LoadCurrentUser();
             
             _contractService = new FirebaseContractService();
             _rewardService = new FirebaseRewardService();
@@ -244,6 +249,7 @@ namespace _App.AdminDashboard
         public void UpdateUIWhenNoContracts(List<SmartContractModel> allContracts)
         {
             contractInfoPanel.SetActive(allContracts.Count == 0);
+            isContractsExist = allContracts.Count == 0;
         }
 
         private void HandleChildInitialized()
@@ -257,7 +263,7 @@ namespace _App.AdminDashboard
         
         public void ShowNewProfileCreatorPanelWhenNoUserYet()
         {
-            addContractButton.gameObject.SetActive(false);
+            //addContractButton.gameObject.SetActive(false);
             OpenNewProfileCreator();
             youNeedToAddUserTextGo.SetActive(true);
         }
@@ -415,7 +421,6 @@ namespace _App.AdminDashboard
                     bg.color = lightGreyColor;
                     line.color = lightGreyColor;
                 }
-
             }
         }
 

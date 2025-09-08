@@ -44,7 +44,7 @@ namespace _App.Dashboard
 
         void UpdateReports(ChildModel child, List<SmartContractModel> allContracts);
 
-        event Action OnChildInitialized;
+        //event Action OnChildInitialized;
         void ShowNewProfileCreatorPanelWhenNoUserYet();
         void UpdateUIWhenNoContracts(List<SmartContractModel> allContracts);
     }

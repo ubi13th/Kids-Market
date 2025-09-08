@@ -6,6 +6,7 @@ using Firebase.Extensions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using _App.Services.Notifications;
 
 namespace _App.SmartContracts
 {
@@ -25,6 +26,10 @@ namespace _App.SmartContracts
         [SerializeField] private Button deleteButton;
 
         [SerializeField] private ContractIconPickerUI iconPickerUI;
+        
+        // instantiate once (DI or quick field)
+        //private readonly INotificationService _notificationService = new CloudFunctionNotificationService();
+        private INotificationService _notificationService;
 
         private IContractService _contractService;
         private IDashboardPresenter _presenter;
@@ -35,6 +40,14 @@ namespace _App.SmartContracts
         private bool _isEditing = false;
         
         private RewardType _currentRewardType;
+        
+        private async void Awake()
+        {
+            // Safe instantiation + async init after scene is alive
+            var cfn = new CloudFunctionNotificationService();
+            await cfn.InitAsync();
+            _notificationService = cfn;
+        }
 
         public void Initialize(IDashboardPresenter presenter, IContractService contractService)
         {
@@ -87,7 +100,8 @@ namespace _App.SmartContracts
             
             Debug.Log(_isEditing);
             
-            createEditScText.text = _isEditing ? "Create Surprise Contract" : "Edit Surprise Contract";
+            //createEditScText.text = _isEditing ? "Create Surprise Contract" : "Edit Surprise Contract";
+            createEditScText.text = _isEditing ? "Edit Surprise Contract" : "Create Surprise Contract";
             
             SmartContractDraft.Reset(_childUid);
             LoadChildRewardConfig(SmartContractDraft.AssignedToUid);
@@ -125,12 +139,16 @@ namespace _App.SmartContracts
 
         private void OpenIconPicker()
         {
+            if (iconPickerUI == null)
+            {
+                Debug.LogWarning("⚠️ iconPickerUI is not assigned.");
+                return;
+            }
             iconPickerUI.OnIconSelected = path =>
             {
                 SmartContractDraft.IconPath = path;
                 icon.sprite = ContractIconLoader.Load(path);
             };
-
             iconPickerUI.gameObject.SetActive(true);
         }
         
@@ -197,6 +215,20 @@ namespace _App.SmartContracts
             rewardInput.SetTextWithoutNotify(rewardString);
             SmartContractDraft.RewardAmount = _rewardAmount;
         }
+        
+        // who should receive the push?
+        static string ResolveTargetUid(string actorRole, ChildModel child)
+        {
+            // child performs action -> notify parent/admin
+            if (string.Equals(actorRole, "child", StringComparison.OrdinalIgnoreCase))
+                return child.AdminUID;   // <- vroe5Wj...
+
+            // admin performs action -> notify the child
+            if (string.Equals(actorRole, "admin", StringComparison.OrdinalIgnoreCase))
+                return child.Uid;
+
+            return child.AdminUID; // sensible default
+        }
 
         private void SaveContract()
         {
@@ -233,6 +265,20 @@ namespace _App.SmartContracts
                 {
                     Debug.Log($"Surprise contract saved with contract.Id = {contract.Id} | AdminUID = {contract.AdminUID}");
                     Hide();
+                    
+                    var actorUid  = _childUid;     // who did the action
+                    var actorRole = "child";
+                    var targetUid = ResolveTargetUid(actorRole, _presenter.CurrentChild);
+
+                    _notificationService.Notify(
+                        targetUid,
+                        type: _isEditing 
+                            ? NotificationEventType.SurpriseContractUpdated 
+                            : NotificationEventType.SurpriseContractCreated,
+                        contract,
+                        actorUid,
+                        actorRole
+                    );
                 }
                 else
                 {

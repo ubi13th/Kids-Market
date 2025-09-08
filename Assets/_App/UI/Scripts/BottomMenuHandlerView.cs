@@ -15,6 +15,7 @@ namespace _App.UI.Scripts
         [SerializeField] private GameObject reportsActivatedIcon;
         [SerializeField] private Button settingsButton;
         [SerializeField] private GameObject settingsActivatedIcon;
+        [SerializeField] private GameObject contractInfoPanel;
         
         [Header("Panels Set Up")]
         [SerializeField] private GameObject reportsPanel;
@@ -34,6 +35,10 @@ namespace _App.UI.Scripts
             settingsActivatedIcon.SetActive(false);
             reportsPanel.SetActive(false);
             settingsPanel.SetActive(false);
+            
+            contractInfoPanel.SetActive(sharedDashboardView.isContractsExist);
+            if(!UserSession.IsAdmin)
+                contractInfoPanel.SetActive(false);
         }
         
         private void OpenReportsPanel()
@@ -43,6 +48,7 @@ namespace _App.UI.Scripts
             settingsActivatedIcon.SetActive(false);
             settingsPanel.SetActive(false);
             reportsPanel.SetActive(true);
+            contractInfoPanel.SetActive(false);
             
             sharedDashboardView.OnOpenHistoryTab();
         }
@@ -54,6 +60,7 @@ namespace _App.UI.Scripts
             homeActivatedIcon.SetActive(false);
             settingsActivatedIcon.SetActive(true);
             settingsPanel.SetActive(true);
+            contractInfoPanel.SetActive(false);
         }
     }
 }

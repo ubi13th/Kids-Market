@@ -12,8 +12,9 @@ namespace _App.Dashboard
         void OnDaySelected(DateTime day);
         void SetCurrentChild(ChildModel child);
         ChildModel CurrentChild { get; }
-
-
+        
+        void SaveAdminProfile(AdminModel admin, Action<bool> callback);
+        
         void ConfirmContractByRole(string contractId);
         void UndoConfirmContractByRole(string contractId);
         

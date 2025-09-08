@@ -33,6 +33,9 @@ namespace _App.Settings
         [SerializeField] private Button confirmDeleteButton;
         [SerializeField] private Button cancelButton;
         
+        private string _editingUserId;
+        private bool _isEditingAdmin;
+        
         [SerializeField] private Color greenColor, lightGreyColor, greyColor;
 
         private IChildService _childService;
@@ -77,6 +80,18 @@ namespace _App.Settings
             field.ActivateInputField();
             field.caretPosition = field.text.Length;
         }
+        
+        /*public void LoadAdminForEdit(UserModel admin)
+        {
+            _editingChildId = admin.Uid;
+            nameInput.text = admin.DisplayName;
+            _avatarPath = admin.AvatarPath;
+            avatarImage.sprite = AvatarLoader.LoadAvatar(_avatarPath);
+            joinCodeText.text = admin.JoinCode;
+            joinCodeText.gameObject.SetActive(true);
+            
+            gameObject.SetActive(true);
+        }
 
         public void LoadChildForEdit(ChildModel child)
         {
@@ -90,7 +105,49 @@ namespace _App.Settings
             SetRewardType(child.RewardPreference);
 
             gameObject.SetActive(true);
+        }*/
+        
+        public void LoadAdminForEdit(UserModel admin)
+        {
+            _isEditingAdmin = true;
+            _editingUserId = admin.Uid;
+
+            nameInput.text = admin.DisplayName;
+            _avatarPath = admin.AvatarPath;
+            avatarImage.sprite = AvatarLoader.LoadAvatar(_avatarPath);
+            joinCodeText.text = admin.JoinCode;
+            joinCodeText.gameObject.SetActive(true);
+
+            // Admin UI specifics
+            moneyButton.gameObject.SetActive(false);
+            pointsButton.gameObject.SetActive(false);
+            noneButton.gameObject.SetActive(false);
+            deleteButton.gameObject.SetActive(false); // (or wire a separate admin-delete flow)
+
+            gameObject.SetActive(true);
         }
+
+        public void LoadChildForEdit(ChildModel child)
+        {
+            _isEditingAdmin = false;
+            _editingUserId = child.Uid;
+
+            nameInput.text = child.DisplayName;
+            _avatarPath = child.AvatarPath;
+            avatarImage.sprite = AvatarLoader.LoadAvatar(_avatarPath);
+            joinCodeText.text = child.JoinCode;
+            joinCodeText.gameObject.SetActive(true);
+
+            moneyButton.gameObject.SetActive(true);
+            pointsButton.gameObject.SetActive(true);
+            noneButton.gameObject.SetActive(true);
+            deleteButton.gameObject.SetActive(true);
+
+            SetRewardType(child.RewardPreference);
+
+            gameObject.SetActive(true);
+        }
+
 
         private void OpenAvatarPicker()
         {
@@ -129,8 +186,75 @@ namespace _App.Settings
 
             button.interactable = !isSelected;
         }
-
+        
         private void SaveChanges()
+        {
+            string name = nameInput.text.Trim();
+            if (string.IsNullOrEmpty(name))
+            {
+                statusText.text = "❌ Name is required.";
+                return;
+            }
+
+            if (_isEditingAdmin) SaveAdmin();
+            else SaveChild();
+        }
+
+        private void SaveAdmin()
+        {
+            string name = nameInput.text.Trim();
+
+            if (string.IsNullOrEmpty(name))
+            {
+                statusText.text = "❌ Name cannot be empty.";
+                return;
+            }
+            
+            var updatedAdmin = new AdminModel
+            {
+                Uid = _editingUserId,
+                DisplayName = nameInput.text.Trim(),
+                AvatarPath = _avatarPath,
+                JoinCode = joinCodeText.text
+            };
+
+            // Prefer going through presenter/service that writes to /admins/{uid}
+            _adminPresenter?.SaveAdminProfile(updatedAdmin, success =>
+            {
+                statusText.text = success ? "✅ Profile updated!" : "❌ Failed to update.";
+                if (success) CloseEditSelectedUserPanel();
+            });
+        }
+
+        private void SaveChild()
+        {
+            string name = nameInput.text.Trim();
+
+            if (string.IsNullOrEmpty(name))
+            {
+                statusText.text = "❌ Name cannot be empty.";
+                return;
+            }
+            
+            var updatedChild = new ChildModel
+            {
+                Uid = _editingUserId,
+                DisplayName = nameInput.text.Trim(),
+                AvatarPath = _avatarPath,
+                RewardPreference = _selectedRewardType,
+                AdminUID = _adminPresenter?.AdminUID ?? FirebaseInit.Auth.CurrentUser?.UserId,
+                JoinCode = joinCodeText.text
+            };
+
+            _childService.SaveChildProfile(updatedChild, success =>
+            {
+                statusText.text = success ? "✅ Profile updated!" : "❌ Failed to update.";
+                if (success) CloseEditSelectedUserPanel();
+            });
+        }
+
+
+        /*private void SaveChanges()
         {
             string name = nameInput.text.Trim();
             if (string.IsNullOrEmpty(name))
@@ -163,7 +287,7 @@ namespace _App.Settings
                     Debug.LogError("❌ Failed to save child.");
                 }
             });
-        }
+        }*/
         
         private void OnClickDeleteAccount() => 
             deleteConfirmationPanel.SetActive(true);

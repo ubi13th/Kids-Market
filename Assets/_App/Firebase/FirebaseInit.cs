@@ -1,10 +1,10 @@
 using Firebase;
 using Firebase.Auth;
 using Firebase.Database;
+using Firebase.Functions;
 using UnityEngine;
 using System;
 using System.Threading.Tasks;
-using Firebase.Extensions;
 
 namespace _App.Bootstrap
 {
@@ -14,25 +14,22 @@ namespace _App.Bootstrap
 
         public static FirebaseAuth Auth { get; private set; }
         public static DatabaseReference DbRef { get; private set; }
-        public static FirebaseApp App { get; private set; }
+        private static FirebaseApp App { get; set; }
+        
+        public static FirebaseFunctions Functions { get; private set; }
+        private const string Region = "us-central1";
         
         public static bool IsReady { get; private set; }
-
         public static event Action OnFirebaseReady;
 
+        // If google-services.json already has the DB URL, this can stay as a fallback.
         private string databaseUrl = "https://kids-market-e481b-default-rtdb.firebaseio.com";
 
         private async void Awake()
         {
-            if (Instance != null)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
+            if (Instance != null) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
-
             await InitializeFirebaseAsync();
         }
 
@@ -40,7 +37,6 @@ namespace _App.Bootstrap
         {
             Debug.Log("🔄 Checking Firebase dependencies...");
             var dependencyStatus = await FirebaseApp.CheckAndFixDependenciesAsync();
-
             if (dependencyStatus != DependencyStatus.Available)
             {
                 Debug.LogError($"❌ Firebase dependency error: {dependencyStatus}");
@@ -52,11 +48,16 @@ namespace _App.Bootstrap
             try
             {
                 Auth = FirebaseAuth.DefaultInstance;
-                DbRef = FirebaseDatabase.GetInstance(App, databaseUrl).RootReference;
+
+                // ✅ Works with both older/newer Database APIs:
+                DbRef = ResolveDbRoot(App, databaseUrl);
+                //DbRef = FirebaseDatabase.GetInstance(App, databaseUrl).RootReference;
                 
+                Functions = FirebaseFunctions.GetInstance(App, Region);
+
                 IsReady = true;
                 Debug.Log("✅ Firebase Initialized");
-                OnFirebaseReady?.Invoke();
+                OnFirebaseReady?.Invoke(); // we awaited, so this runs on main thread in practice
             }
             catch (Exception ex)
             {
@@ -67,15 +68,42 @@ namespace _App.Bootstrap
         // Async-safe hook for other services
         public static async Task WaitUntilReady()
         {
-            while (!IsReady)
+            while (!IsReady) { await Task.Yield(); }
+        }
+
+        // ✅ Avoid property pattern; widest compatibility
+        public static string CurrentUserId =>
+            (Auth != null && Auth.CurrentUser != null) ? Auth.CurrentUser.UserId : string.Empty;
+
+        // ---- Helpers ----
+        private static DatabaseReference ResolveDbRoot(FirebaseApp app, string url)
+        {
+            try
             {
-                await Task.Yield(); // non-blocking wait
+                // Newer SDKs: FirebaseDatabase.GetInstance(app, url)
+                var mi = typeof(FirebaseDatabase).GetMethod(
+                    "GetInstance", new Type[] { typeof(FirebaseApp), typeof(string) });
+                if (mi != null)
+                {
+                    var db = (FirebaseDatabase)mi.Invoke(null, new object[] { app, url });
+                    return db.RootReference;
+                }
+            }
+            catch { /* fall through */ }
+
+            try
+            {
+                // Older SDKs: GetInstance(app) + GetReferenceFromUrl(url)
+                var db = FirebaseDatabase.GetInstance(app);
+                if (!string.IsNullOrEmpty(url))
+                    return db.GetReferenceFromUrl(url);
+                return db.RootReference;
+            }
+            catch
+            {
+                // Last resort
+                return FirebaseDatabase.DefaultInstance.RootReference;
             }
         }
-        
-        // Utility to get current user ID
-        public static string CurrentUserId => Auth is { CurrentUser: not null }
-            ? Auth.CurrentUser.UserId
-            : string.Empty;
     }
 }

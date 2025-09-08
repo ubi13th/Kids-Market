@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using _App.Bootstrap;
 using _App.ChildDashboard;
 using _App.Dashboard;
 using _App.Models;
 using _App.Services;
 using _App.Services.BalanceService;
 using UnityEngine;
+using _App.Services.Notifications;
 
 namespace _App.AdminDashboard
 {
@@ -16,11 +18,16 @@ namespace _App.AdminDashboard
         private readonly IBalanceListenerService _balanceListenerService;
         private readonly IncomeDistributorService _distributorService = new();
         
+        // instantiate once (DI or quick field)
+        private readonly INotificationService _notificationService = new CloudFunctionNotificationService();
+        
         private ExtraRewardModel _currentExtraReward;
         private RewardType _type;
         
         public List<SmartContractModel> GetAllContracts() => _allContracts;
         private ExtraRewardModel _extraRewardModel = new();
+
+        public List<UserModel> GetAllAdmins() => new();
         
         private string _pendingNewChildUid = null;
         
@@ -57,6 +64,8 @@ namespace _App.AdminDashboard
             _contractListenerService.ListenToAdminContracts(adminUID, OnContractsChanged);
 
             new DailyContractStateUpdater().Run(adminUID, isAdmin: true);
+            
+            TokenOwner.Set(adminUID);
         }
         
         public void SetPendingNewChild(string childUid) => 
@@ -66,8 +75,7 @@ namespace _App.AdminDashboard
         {
             base.UpdateChildBalance(delta, reason, recordHistory);
         }
-
-
+        
         private void RefreshCalendarUI()
         {
             _view.SetupCalendarButtons();
@@ -143,7 +151,7 @@ namespace _App.AdminDashboard
         private void OnContractsChanged(List<SmartContractModel> allContracts)
         {
             _allContracts = allContracts ?? new List<SmartContractModel>();
-            _view.UpdateCalendarColors(_allContracts, _currentChild.Uid);
+            _view.UpdateCalendarColors(_allContracts, _currentChild?.Uid ?? string.Empty);
             _view.UpdateUIWhenNoContracts(_allContracts);
 
             if (_currentChild != null)
@@ -172,8 +180,7 @@ namespace _App.AdminDashboard
             _view.UpdateCalendarColors(_allContracts, _currentChild.Uid);
             _view.UpdateReports(_currentChild, _allContracts);
             FilterAndShowContracts();
-            
-            // ✅ Reward listener
+
             // ✅ Reward listener
             _rewardService.ListenToReward(child.Uid, reward =>
             {
@@ -220,6 +227,20 @@ namespace _App.AdminDashboard
 
         public void UndoConfirmContractByRole(string contractId) => 
             AdminUndoConfirmContract(contractId);
+        
+        // who should receive the push?
+        static string ResolveTargetUid(string actorRole, ChildModel child)
+        {
+            // child performs action -> notify parent/admin
+            if (string.Equals(actorRole, "child", StringComparison.OrdinalIgnoreCase))
+                return child.AdminUID;   // <- vroe5Wj...
+
+            // admin performs action -> notify the child
+            if (string.Equals(actorRole, "admin", StringComparison.OrdinalIgnoreCase))
+                return child.Uid;
+
+            return child.AdminUID; // sensible default
+        }
         
         private void AdminConfirmContract(string contractId)
         {
@@ -283,6 +304,20 @@ namespace _App.AdminDashboard
                             _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
 
                             //UpdateChildBalance(contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
+
+                            var actorUid  = _currentChild.AdminUID;
+                            var actorRole = "admin";
+                            var targetUid = contract.AssignedToUid;
+                            
+                            Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+                            
+                            _notificationService.Notify(
+                                targetUid,
+                                NotificationEventType.ContractApprovedByAdmin,
+                                contract,
+                                actorUid,
+                                actorRole
+                            );
                         }
                     });
 
@@ -348,6 +383,20 @@ namespace _App.AdminDashboard
                             _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
 
                             //UpdateChildBalance(parent.RewardAmount, $"Contract '{parent.Title}' confirmed");
+                            
+                            var actorUid  = _currentChild.AdminUID;
+                            var actorRole = "admin";
+                            var targetUid = contract.AssignedToUid;
+                            
+                            Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                            _notificationService.Notify(
+                                targetUid,
+                                NotificationEventType.ContractApprovedByAdmin,
+                                contract,
+                                actorUid,
+                                actorRole
+                            );
                         });
                     });
 
@@ -366,6 +415,20 @@ namespace _App.AdminDashboard
                             _distributorService.DistributeIncome(_currentChild.Uid, contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
 
                             //UpdateChildBalance(contract.RewardAmount, $"Contract '{contract.Title}' confirmed");
+                            
+                            var actorUid  = _currentChild.AdminUID;
+                            var actorRole = "admin";
+                            var targetUid = contract.AssignedToUid;
+                            
+                            Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+                            
+                            _notificationService.Notify(
+                                targetUid,
+                                NotificationEventType.ContractApprovedByAdmin,
+                                contract,
+                                actorUid,
+                                actorRole
+                            );
                         }
                     });
                 }
@@ -452,6 +515,20 @@ namespace _App.AdminDashboard
                                     contract.RewardAmount,
                                     $"Undo confirmation for contract '{contract.Title}'"
                                 );
+                                
+                                var actorUid  = _currentChild.AdminUID;
+                                var actorRole = "admin";
+                                var targetUid = contract.AssignedToUid;
+                                
+                                Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+
+                                _notificationService.Notify(
+                                    targetUid,
+                                    NotificationEventType.ContractUndoByAdmin,
+                                    contract,
+                                    actorUid,
+                                    actorRole
+                                );
                             }
                         }
 
@@ -480,6 +557,20 @@ namespace _App.AdminDashboard
                                     _currentChild.Uid,
                                     contract.RewardAmount,
                                     $"Undo confirmation for contract '{contract.Title}'"
+                                );
+                                
+                                var actorUid  = _currentChild.AdminUID;
+                                var actorRole = "admin";
+                                var targetUid = contract.AssignedToUid;
+                                
+                                Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+                                
+                                _notificationService.Notify(
+                                    targetUid,
+                                    NotificationEventType.ContractUndoByAdmin,
+                                    contract,
+                                    actorUid,
+                                    actorRole
                                 );
                             }
 
@@ -572,7 +663,23 @@ namespace _App.AdminDashboard
                         void FinalizeDecline(bool success)
                         {
                             if (success)
+                            {
                                 Debug.Log($"🛑 Admin declined AsNeeded confirmation request: {contract.Title} (queue {matchingKey})");
+                                
+                                var actorUid  = _currentChild.AdminUID;
+                                var actorRole = "admin";
+                                var targetUid = contract.AssignedToUid;
+                                
+                                Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+                                
+                                _notificationService.Notify(
+                                    targetUid,
+                                    NotificationEventType.ContractDeclinedByAdmin,
+                                    contract,
+                                    actorUid,
+                                    actorRole
+                                );
+                            }
                         }
 
                         if (contract.StateHistory.Count == 0)
@@ -594,6 +701,20 @@ namespace _App.AdminDashboard
                         if (success)
                         {
                             Debug.Log($"🛑 Contract declined and reverted to ReadyToSell: {contract.Title}");
+                            
+                            var actorUid  = _currentChild.AdminUID;
+                            var actorRole = "admin";
+                            var targetUid = contract.AssignedToUid;
+                            
+                            Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+                            
+                            _notificationService.Notify(
+                                targetUid,
+                                NotificationEventType.ContractDeclinedByAdmin,
+                                contract,
+                                actorUid,
+                                actorRole
+                            );
                         }
                     });
                 }
@@ -659,6 +780,20 @@ namespace _App.AdminDashboard
                             contract.RewardAmount,
                             $"Undo purchase of contract '{contract.Title}'"
                         );
+                        
+                        var actorUid  = _currentChild.AdminUID;
+                        var actorRole = "admin";
+                        var targetUid = contract.AssignedToUid;
+                        
+                        Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+                        
+                        _notificationService.Notify(
+                            targetUid,
+                            NotificationEventType.ContractUndoPurchasedByAdmin,
+                            contract,
+                            actorUid,
+                            actorRole
+                        );
                     }
                 });
             });
@@ -686,9 +821,34 @@ namespace _App.AdminDashboard
             _contractService.SaveContract(contract, success =>
             {
                 if (!success)
+                {
                     Debug.LogWarning("❌ Failed to save contract");
+                    return;
+                }
+                
+                // Notify child that a (new or edited) contract exists
+                var actorUid  = _currentChild.AdminUID;
+                var actorRole = "admin";
+                var targetUid = contract.AssignedToUid;
+                var type = NotificationEventType.ContractCreatedByAdmin;
+                
+                // if you keep a list of parent/admin UIDs:
+                //var parentUids = family.Adults.Select(a => a.Uid);
+                //foreach (var uid in parentUids)
+                    //_notificationService.Notify(uid, type, contract, actorUid, actorRole);
+                    
+                Debug.Log($"[Notify] target:{targetUid} actor:{actorUid}/{actorRole} child:{_currentChild?.Uid} admin:{_currentChild?.AdminUID}");
+                
+                _notificationService.Notify(
+                    targetUid,
+                    type,
+                    contract,
+                    actorUid,
+                    actorRole
+                );
             });
         }
+
 
         public void DeleteContract(string contractId)
         {

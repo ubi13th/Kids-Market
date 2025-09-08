@@ -26,6 +26,10 @@ public class SmartContractModel
     [JsonProperty] public string ParentId;
     [JsonProperty] public string AdminUID;
     [JsonProperty] public string AssignedToUid;
+    
+    // Cache so we don't reparse repeatedly
+    [NonSerialized] private string _parsedRaw;
+    [NonSerialized] private bool _parsedOnce;
 
     [JsonProperty] public bool IsCopy;
     //public bool isCopy;
@@ -44,6 +48,78 @@ public class SmartContractModel
     }
 
     // ─────────────────────────────────────────────────────────────
+    
+    private void EnsureParsed()
+    {
+        if (_parsedOnce && _parsedRaw == stateHistoryRaw) return;
+        ParseStateHistoryInternal();
+        _parsedRaw = stateHistoryRaw;
+        _parsedOnce = true;
+    }
+
+    private void ParseStateHistoryInternal()
+    {
+        StateHistory = new();
+
+        if (string.IsNullOrWhiteSpace(stateHistoryRaw))
+        {
+            Debug.LogWarning($"⚠️ stateHistoryRaw is null or empty for contract {Id} ('{Title ?? "(untitled)"}')");
+            return;
+        }
+
+        // AsNeeded copies use queue format
+        if (IsCopy && RepeatMode == RepeatType.AsNeeded)
+        {
+            var entries = stateHistoryRaw.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var entry in entries)
+            {
+                var segments = entry.Split(new[] { '#' }, StringSplitOptions.RemoveEmptyEntries);
+                if (segments.Length < 2) continue;
+
+                var datePart = segments[0].Trim();
+
+                for (int i = 1; i < segments.Length; i++)
+                {
+                    var sub = segments[i].Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (sub.Length != 2) continue;
+
+                    if (!int.TryParse(sub[0], out var queueIndex)) continue;
+                    if (!int.TryParse(sub[1], out var stateVal)) continue;
+
+                    if (!Enum.IsDefined(typeof(SmartContractState), stateVal))
+                        stateVal = (int)SmartContractState.ReadyToBuy;
+
+                    string key = $"{datePart}#{queueIndex}";
+                    if (!StateHistory.TryGetValue(key, out var list))
+                        StateHistory[key] = list = new();
+
+                    list.Add(new StateRecord { QueueId = key, State = (SmartContractState)stateVal });
+                }
+            }
+            return;
+        }
+
+        // Flat format
+        var flatEntries = stateHistoryRaw.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var entry in flatEntries)
+        {
+            var parts = entry.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2) continue;
+
+            if (!DateTime.TryParseExact(parts[0], "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out _)) continue;
+
+            if (!int.TryParse(parts[1], out var stateVal)) continue;
+            if (!Enum.IsDefined(typeof(SmartContractState), stateVal))
+                stateVal = (int)SmartContractState.ReadyToBuy;
+
+            string key = parts[0];
+            if (!StateHistory.TryGetValue(key, out var list))
+                StateHistory[key] = list = new();
+
+            list.Add(new StateRecord { QueueId = null, State = (SmartContractState)stateVal });
+        }
+    }
 
     public void SetStartDate(DateTime date) =>
         StartDate = DateTime.SpecifyKind(date.Date, DateTimeKind.Unspecified).ToString("yyyy-MM-dd");
@@ -71,8 +147,38 @@ public class SmartContractModel
         var parts = queueId.Split('#');
         return (parts.Length == 2 && int.TryParse(parts[1], out var idx)) ? idx : 0;
     }
-
+    
     public void SyncStateHistory()
+    {
+        EnsureParsed();
+
+        if (IsCopy && RepeatMode == RepeatType.AsNeeded)
+        {
+            // group by date part
+            var groupedByDay = StateHistory
+                .SelectMany(kv => kv.Value)
+                .Where(r => !string.IsNullOrEmpty(r.QueueId))
+                .GroupBy(r => ExtractDatePart(r.QueueId));
+
+            var perDay = new List<string>();
+            foreach (var dayGroup in groupedByDay)
+            {
+                var ordered = dayGroup
+                    .OrderBy(r => ExtractQueueIndex(r.QueueId))
+                    .Select(r => $"#{ExtractQueueIndex(r.QueueId)}:{(int)r.State}");
+                perDay.Add($"{dayGroup.Key}{string.Concat(ordered)}");
+            }
+
+            stateHistoryRaw = string.Join("|", perDay);
+            return;
+        }
+
+        // flat
+        stateHistoryRaw = string.Join(";", StateHistory.Select(kv => $"{kv.Key}:{(int)kv.Value.Last().State}"));
+    }
+
+
+    /*public void SyncStateHistory()
     {
         if (IsCopy && RepeatMode == RepeatType.AsNeeded)
         {
@@ -99,7 +205,7 @@ public class SmartContractModel
             stateHistoryRaw = string.Join(";",
                 StateHistory.Select(kv => $"{kv.Key}:{(int)kv.Value.Last().State}"));
         }
-    }
+    }*/
 
     public void LoadStateHistory()
     {
@@ -172,8 +278,10 @@ public class SmartContractModel
             Debug.LogWarning("❌ Use SetStateOnDateWithQueue for AsNeeded copies.");
             return;
         }
+        
+        EnsureParsed();
 
-        LoadStateHistory();
+        //LoadStateHistory();
         var key = date.ToString("yyyy-MM-dd");
 
         if (!StateHistory.ContainsKey(key))
@@ -186,7 +294,9 @@ public class SmartContractModel
 
     public void SetStateOnDateWithQueue(DateTime date, SmartContractState state, int queueIndex)
     {
-        LoadStateHistory();
+        //LoadStateHistory();
+        
+        EnsureParsed();
 
         if (!IsCopy || RepeatMode != RepeatType.AsNeeded)
         {
@@ -203,11 +313,48 @@ public class SmartContractModel
 
         SyncStateHistory();
     }
-
+    
     public void RemoveStateRecord(DateTime date, string queueId)
+    {
+        EnsureParsed();
+        string prefix = date.ToString("yyyy-MM-dd");
+
+        if (string.IsNullOrEmpty(queueId))
+        {
+            // remove the whole day
+            if (IsCopy && RepeatMode == RepeatType.AsNeeded)
+            {
+                var keys = StateHistory.Keys.Where(k => k == prefix || k.StartsWith(prefix + "#")).ToList();
+                foreach (var k in keys) StateHistory.Remove(k);
+            }
+            else
+            {
+                StateHistory.Remove(prefix);
+            }
+            SyncStateHistory();
+            return;
+        }
+
+        // remove specific queue item
+        var key = StateHistory.Keys.FirstOrDefault(k => k == prefix || k.StartsWith(prefix + "#"));
+        if (key == null) return;
+
+        var list = StateHistory[key];
+        var target = list.FirstOrDefault(r => r.QueueId == queueId);
+        if (target != null)
+        {
+            list.Remove(target);
+            if (list.Count == 0) StateHistory.Remove(key);
+            SyncStateHistory();
+        }
+    }
+
+
+    /*public void RemoveStateRecord(DateTime date, string queueId)
     {
         LoadStateHistory();
         string targetKey = TryGetMatchingKey(date);
+        
         if (string.IsNullOrEmpty(targetKey)) return;
 
         var list = StateHistory[targetKey];
@@ -228,7 +375,7 @@ public class SmartContractModel
         }
 
         SyncStateHistory();
-    }
+    }*/
 
     public string TryGetMatchingKey(DateTime date)
     {
@@ -337,8 +484,30 @@ public class SmartContractModel
             _ => false
         };
     }
-
+    
     private bool IsOnceVisibleOn(DateTime target)
+    {
+        EnsureParsed();
+
+        var key = target.ToString("yyyy-MM-dd");
+        if (StateHistory.TryGetValue(key, out var todays) && todays.Any(r => r.State == SmartContractState.Completed))
+            return false;
+
+        foreach (var kv in StateHistory)
+        {
+            if (!kv.Key.Contains("#") &&
+                DateTime.TryParseExact(kv.Key, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) &&
+                d < target &&
+                kv.Value.Any(r => r.State == SmartContractState.Completed))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /*private bool IsOnceVisibleOn(DateTime target)
     {
         LoadStateHistory();
         if (StateHistory.TryGetValue(target.ToString("yyyy-MM-dd"), out var stateOnTarget) &&
@@ -356,7 +525,7 @@ public class SmartContractModel
         }
 
         return true;
-    }
+    }*/
 
     public RepeatType GetEffectiveRepeatMode() =>
         IsCopy ? RepeatType.EveryDay : RepeatMode;
